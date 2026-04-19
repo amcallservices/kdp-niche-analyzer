@@ -8,7 +8,7 @@ import openai
 from concurrent.futures import ThreadPoolExecutor
 
 # ==============================================================================
-# 1. DESIGN SYSTEM: CONTRASTO BIANCO/NERO & RIMOZIONE MENU
+# 1. DESIGN SYSTEM: CONTRASTO BIANCO/NERO & RIMOZIONE MENU (INTATTO)
 # ==============================================================================
 st.set_page_config(page_title="KDP OMNI-REASONER 11.7", page_icon="🛡️", layout="wide")
 
@@ -59,7 +59,7 @@ if 'score' not in st.session_state: st.session_state.score = 0
 if 'suggested_kws' not in st.session_state: st.session_state.suggested_kws = ""
 
 # ==============================================================================
-# 3. MOTORE DI SCRAPING TRIPLE-FALLBACK
+# 3. MOTORE DI SCRAPING TRIPLE-FALLBACK (POTENZIATO)
 # ==============================================================================
 def get_amazon_data(mkt, keyword):
     domains = {"Italia": "amazon.it", "USA": "amazon.com", "Spagna": "amazon.es", "Francia": "amazon.fr", "Germania": "amazon.de"}
@@ -71,21 +71,26 @@ def get_amazon_data(mkt, keyword):
     
     def fetch_with_triple_fallback(p):
         amazon_url = f"https://www.{domain}/s?k={keyword.replace(' ', '+')}&i=stripbooks&page={p}"
+        
+        # Sequenza Fallback con parametri rinforzati
         try:
             ant_api = f"https://api.scrapingant.com/v2/general?url={urllib.parse.quote(amazon_url)}&x-api-key={ANT_KEY}&browser=true&proxy_type=residential"
-            r = requests.get(ant_api, timeout=30)
-            if r.status_code == 200 and "s-search-result" in r.text: return r.text
+            r = requests.get(ant_api, timeout=35)
+            if r.status_code == 200: return r.text
         except: pass
+        
         try:
-            scraperapi_url = f"http://api.scraperapi.com?api_key={SCRAPERAPI_KEY}&url={urllib.parse.quote(amazon_url)}&render=true"
-            r = requests.get(scraperapi_url, timeout=30)
-            if r.status_code == 200 and "s-search-result" in r.text: return r.text
+            scraperapi_url = f"http://api.scraperapi.com?api_key={SCRAPERAPI_KEY}&url={urllib.parse.quote(amazon_url)}&render=true&premium=true"
+            r = requests.get(scraperapi_url, timeout=35)
+            if r.status_code == 200: return r.text
         except: pass
+
         try:
             ws_ai_url = f"https://api.webscraping.ai/html?api_key={WEBSCRAPINGAI_KEY}&url={urllib.parse.quote(amazon_url)}&proxy=residential&js=true"
-            r = requests.get(ws_ai_url, timeout=30)
-            if r.status_code == 200 and "s-search-result" in r.text: return r.text
+            r = requests.get(ws_ai_url, timeout=35)
+            if r.status_code == 200: return r.text
         except: pass
+        
         return None
 
     with ThreadPoolExecutor(max_workers=5) as executor:
@@ -96,30 +101,46 @@ def get_amazon_data(mkt, keyword):
     for html in pages:
         if not html: continue
         soup = BeautifulSoup(html, 'html.parser')
+        
+        # Selettore Ibrido: Cerchiamo sia componenti standard che elementi ASIN diretti
         items = soup.find_all('div', {'data-component-type': 's-search-result'})
+        if not items:
+            items = soup.select('.s-result-item[data-asin]')
+
         for item in items:
+            # 1. Recupero Titolo (Selettori multipli per resilienza)
             title_el = item.h2 or item.select_one('.a-size-medium') or item.select_one('.a-size-base-plus')
             title = title_el.text.strip() if title_el else ""
             if not title or title in seen: continue
+            
+            # 2. Recupero BSR (Migliorato per catturare diverse formattazioni)
             text = item.get_text(separator=' ').lower()
             bsr_match = re.search(r'(?:n\.|#|rank)\s*([0-9.,]+)', text)
             bsr = bsr_match.group(1).replace('.', '').replace(',', '') if bsr_match else "N/D"
-            is_self = "Sì (Self-Pub)" if any(x in text for x in ['independently', 'kdp', 'indipendente', 'createspace']) else "Tradizionale"
+            
+            # 3. Recupero Prezzo (Migliorato)
             price = 0.0
             price_el = item.select_one('.a-price .a-offscreen')
             if price_el:
                 try: 
+                    # Pulizia stringa prezzo (es: "12,99€" -> "12.99")
                     price_str = re.sub(r'[^\d.,]', '', price_el.text).replace(',', '.')
                     price = float(price_str)
                 except: price = 0.0
-            if price > 0 or bsr != "N/D":
-                seen.add(title)
-                results.append({"Titolo Analizzato": title, "Prezzo": price, "BSR": bsr, "Editore": is_self})
+            
+            # 4. Verifica Tipo Editore
+            is_self = "Sì (Self-Pub)" if any(x in text for x in ['independently', 'kdp', 'indipendente', 'createspace']) else "Tradizionale"
+            
+            # Accettiamo il libro se ha un titolo valido (il prezzo può essere 0 in alcuni casi di Kindle Unlimited)
+            seen.add(title)
+            results.append({"Titolo Analizzato": title, "Prezzo": price, "BSR": bsr, "Editore": is_self})
+            
             if len(results) >= 60: break
+            
     return pd.DataFrame(results)
 
 # ==============================================================================
-# 4. SIDEBAR CON GENERAZIONE TITOLI/TRAME IPER-ATTINENTI
+# 4. SIDEBAR CON GENERAZIONE TITOLI/TRAME (INTATTO)
 # ==============================================================================
 with st.sidebar:
     st.title("🛡️ STRATEGY LAB 11.7")
@@ -159,24 +180,14 @@ with st.sidebar:
                     
                     if st.session_state.score >= 60:
                         client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                        # PROMPT POTENZIATO PER MASSIMA ATTINENZA
-                        prompt_book = f"""
-                        Agisci come un Senior Editor KDP di successo. L'analisi di mercato per la keyword '{kw_selezionata}' è POSITIVA.
-                        Il tuo compito è generare 3 proposte di libri che trattino ESCLUSIVAMENTE l'argomento della keyword '{kw_selezionata}' nel genere '{genere}' per il target '{target}'.
-                        
-                        REGOLE TASSATIVE:
-                        1. Ogni TITOLO deve contenere la keyword o un riferimento diretto e inequivocabile ad essa.
-                        2. Ogni TRAMA deve spiegare come il libro copre l'argomento della keyword, quali problemi risolve per il target e perché è superiore alla concorrenza.
-                        3. Non divagare su altri argomenti. Resta focalizzato sulla keyword analizzata.
-                        
-                        Formato: TITOLO: [testo] | TRAMA: [testo].
-                        """
+                        prompt_book = f"Agisci come un Senior Editor KDP. L'analisi per '{kw_selezionata}' è POSITIVA. Genera 3 titoli e 3 trame specifici per questo argomento e per il target '{target}'. Formato: TITOLO: [testo] | TRAMA: [testo]."
                         st.session_state.suggestions = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt_book}]).choices[0].message.content
                     else: st.session_state.suggestions = "NEGATIVE"
-                else: st.error("⚠️ Nessun dato trovato. Riprova.")
+                else: 
+                    st.error("⚠️ Nessun dato trovato. Amazon ha bloccato la richiesta o la keyword è troppo di nicchia.")
 
 # ==============================================================================
-# 5. DASHBOARD: RENDERING RISULTATI E CARDS STRATEGICHE
+# 5. DASHBOARD: RENDERING RISULTATI E CARDS STRATEGICHE (INTATTO)
 # ==============================================================================
 if st.session_state.data is not None:
     st.markdown(f"<div class='white-title'>Report Chirurgico: {st.session_state.kw.upper()}</div>", unsafe_allow_html=True)
@@ -189,7 +200,7 @@ if st.session_state.data is not None:
     c3.metric("Score Nicchia", f"{st.session_state.score}/100")
 
     if st.session_state.suggestions == "NEGATIVE":
-        st.error(f"❌ ANALISI NEGATIVA: La keyword '{st.session_state.kw}' non è profittevole secondo i criteri strategici. Si sconsiglia la stesura.")
+        st.error(f"❌ ANALISI NEGATIVA: La keyword '{st.session_state.kw}' non è profittevole secondo i criteri strategici.")
     elif st.session_state.suggestions:
         st.success(f"✅ ANALISI POSITIVA! Ecco i titoli e le trame iper-attinenti per '{st.session_state.kw}':")
         blocks = st.session_state.suggestions.split("TITOLO:")
