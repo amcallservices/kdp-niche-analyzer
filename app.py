@@ -42,7 +42,7 @@ st.markdown("""
             border: 1px solid #30363d !important;
         }
 
-        /* METRICHE */
+        /* METRICHE AREA PRINCIPALE */
         .stMetric {
             background-color: #ffffff !important;
             border: 1px solid #d0d7de !important;
@@ -61,7 +61,6 @@ st.markdown("""
             border: 1px solid #d0d7de;
             margin-bottom: 10px;
         }
-        .highlight { color: #0969da; font-weight: bold; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -75,9 +74,10 @@ class KDPFreeTools:
     
     @staticmethod
     def get_amazon_suggestions(keyword, mkt_code):
-        """Simula Publisher Rocket: estrae i suggerimenti reali di Amazon Autocomplete."""
+        """Estrae i suggerimenti reali di Amazon Autocomplete."""
         mkt_map = {"Italia": "it", "USA": "com", "Spagna": "es", "Francia": "fr", "Germania": "de"}
         suffix = mkt_map.get(mkt_code, "it")
+        # API Autocomplete di Amazon
         url = f"https://completion.amazon.com/api/2017/suggestions?limit=10&prefix={urllib.parse.quote(keyword)}&alias=stripbooks&mid=ATVPDKIKX0DER"
         if suffix == "it": url = url.replace("com", "it").replace("ATVPDKIKX0DER", "APJ6JRA9NG5V4")
         
@@ -149,7 +149,6 @@ def scrape_amazon_elite(mkt, keyword, pages, color_mode):
             link_tag = item.find('a', class_='a-link-normal s-no-outline')
             if link_tag:
                 p_url = f"https://www.{domain}" + link_tag['href']
-                # Deep scan per BSR ed Editore
                 res_p = requests.get('http://api.scraperapi.com', params={'api_key': API_KEY, 'url': p_url, 'country_code': country})
                 if res_p.status_code == 200:
                     ps = BeautifulSoup(res_p.text, 'html.parser').get_text().lower()
@@ -174,12 +173,13 @@ def scrape_amazon_elite(mkt, keyword, pages, color_mode):
 # ==============================================================================
 # 4. SIDEBAR STRATEGICA (DARK & FISSA)
 # ==============================================================================
-if 'kw' not in st.session_state: st.session_state['kw'] = ""
+if 'kw_session' not in st.session_state: 
+    st.session_state['kw_session'] = ""
 
 with st.sidebar:
     st.title("🛡️ KDP STRATEGY HUB")
     if st.button("🔄 NUOVA ANALISI", use_container_width=True):
-        st.session_state['kw'] = ""; st.rerun()
+        st.session_state['kw_session'] = ""; st.rerun()
 
     st.markdown("---")
     st.subheader("🛠️ Ingegneria della Keyword")
@@ -189,72 +189,71 @@ with st.sidebar:
         ben = st.text_input("Beneficio:", placeholder="es. flessibilità")
         if arg and pub and ben:
             k1 = f"{arg} per {pub}: {ben}"
-            if st.button(f"🎯 Usa: {k1}"): st.session_state['kw'] = k1; st.rerun()
+            if st.button(f"🎯 Usa: {k1}", use_container_width=True): 
+                st.session_state['kw_session'] = k1; st.rerun()
             k2 = f"Manuale di {arg} per {pub} per {ben}"
-            if st.button(f"📦 Usa: {k2}"): st.session_state['kw'] = k2; st.rerun()
+            if st.button(f"📦 Usa: {k2}", use_container_width=True): 
+                st.session_state['kw_session'] = k2; st.rerun()
 
     st.markdown("---")
     mkt = st.selectbox("Marketplace", ["Italia", "USA", "Spagna", "Francia", "Germania"])
-    query = st.text_input("🔍 Keyword Analisi", value=st.session_state['kw'])
+    query = st.text_input("🔍 Keyword Analisi", value=st.session_state['kw_session'])
     
-    # SUGGERIMENTI GRATUITI (LIVE)
+    # SUGGERIMENTI LIVE (CORRETTO)
     if query:
         with st.expander("💡 Suggerimenti Autocomplete (Gratis)"):
-            suggs = KDPFreeTools.get_amazon_data_suggestions(query, mkt) if 'query' in locals() else []
+            # Chiamata corretta alla funzione get_amazon_suggestions
+            suggs = KDPFreeTools.get_amazon_suggestions(query, mkt)
             for s in suggs:
-                if st.button(f"🔎 {s}", key=s):
-                    st.session_state['kw'] = s; st.rerun()
+                if st.button(f"🔎 {s}", key=s, use_container_width=True):
+                    st.session_state['kw_session'] = s
+                    st.rerun()
 
     st.markdown("---")
     pgs = st.number_input("Pagine", min_value=24, value=120)
     stampa = st.selectbox("Stampa", ["Bianco e Nero", "A Colori"])
     
-    run = st.button("AVVIA DEEP SCAN", type="primary", use_container_width=True)
+    run_analysis = st.button("AVVIA ANALISI PROFONDA", type="primary", use_container_width=True)
 
 # ==============================================================================
 # 5. DASHBOARD RISULTATI
 # ==============================================================================
-if run and query:
+if run_analysis and query:
     st.header(f"📊 Business Intelligence: {query.upper()}")
     
-    # Link a Google Trends (Gratis)
+    # Google Trends Link
     trends_url = KDPFreeTools.get_google_trends_link(query)
-    st.markdown(f"🔗 [Apri Analisi Trend su Google (Gratis)]({trends_url})")
+    st.markdown(f"🔗 [Analisi Trend Esterna su Google (Gratis)]({trends_url})")
 
-    with st.spinner("Scansione editoriale in corso..."):
-        df = scrape_amazon_elite(mkt, query, pgs, stampa)
+    with st.spinner("Scansione editoriale esclusiva in corso..."):
+        df_results = scrape_amazon_elite(mkt, query, pgs, stampa)
         
-        if df is not None and not df.empty:
-            st.dataframe(df, column_config={"Copertina": st.column_config.ImageColumn("Cover")}, use_container_width=True, hide_index=True)
+        if df_results is not None and not df_results.empty:
+            st.dataframe(df_results, column_config={"Copertina": st.column_config.ImageColumn("Cover")}, use_container_width=True, hide_index=True)
             
-            # Calcolo Metriche
-            df['Profit_N'] = df['Profitto'].str.replace(' €', '').astype(float)
-            df['Royalty_N'] = df['Royalty Netta'].str.replace(' €', '').astype(float)
-            avg_p = df['Prezzo'].mean()
-            avg_r = df['Royalty_N'].mean()
-            s_ratio = (len(df[df["Self-Pub"] == "Sì"]) / len(df)) * 100
+            # Calcolo Metriche Finali
+            df_results['Profit_Val'] = df_results['Profitto'].str.replace(' €', '').astype(float)
+            df_results['Royalty_Val'] = df_results['Royalty Netta'].str.replace(' €', '').astype(float)
+            
+            avg_price = df_results['Prezzo'].mean()
+            avg_roy = df_results['Royalty_Val'].mean()
+            self_ratio = (len(df_results[df_results["Self-Pub"] == "Sì"]) / len(df_results)) * 100
             
             st.markdown("---")
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("Prezzo Medio", f"{avg_p:.2f} €")
-            c2.metric("Royalty Media", f"{avg_r:.2f} €")
-            c3.metric("Self-Pub Ratio", f"{int(s_ratio)}%")
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Prezzo Medio", f"{avg_price:.2f} €")
+            col2.metric("Royalty Media", f"{avg_roy:.2f} €")
+            col3.metric("Self-Pub Ratio", f"{int(self_ratio)}%")
             
-            # Sostenibilità ADS (Funzione Gratis)
-            ads_check = "SÌ" if avg_r > 3.50 else "NO"
-            c4.metric("Sostenibilità ADS", ads_check, help="Se la royalty è sotto i 3.50€, fare Ads è molto rischioso.")
+            # Sostenibilità ADS
+            ads_status = "OTTIMO" if avg_roy > 4.0 else "RISCHIOSO" if avg_roy > 2.5 else "SCONSIGLIATO"
+            col4.metric("Sostenibilità ADS", ads_status)
 
             st.markdown("---")
-            col_l, col_r = st.columns(2)
-            with col_l:
-                st.subheader("📝 Verdetto di Fattibilità")
-                if s_ratio > 40 and avg_p > 12.90:
-                    st.success("✅ **NICCHIA VALIDATA**: Alta presenza di Self-Publisher e margini sani per le Ads.")
-                else:
-                    st.warning("⚠️ **ATTENZIONE**: Nicchia dominata da grandi brand o margini troppo bassi.")
-
-            with col_r:
-                st.subheader("🧠 Suggerimento Strategico")
-                st.info(f"Punta su un titolo che includa '{query}' e aggiungi un sottotitolo focalizzato sul 'Beneficio' inserito nella sidebar.")
+            st.subheader("📝 Verdetto di Nicchia")
+            if self_ratio > 40 and avg_price > 12.0:
+                st.success(f"✅ Nicchia dominata da autori indipendenti con margini sani ({avg_roy:.2f}€). Ottima opportunità per pubblicare.")
+            else:
+                st.warning("⚠️ Margini bassi o concorrenza di grandi case editrici rilevata. Analizzare bene la copertina dei competitor prima di entrare.")
         else:
-            st.error("Errore di connessione. Riprova tra un minuto.")
+            st.error("Amazon ha limitato la richiesta. Riprova tra 60 secondi.")
