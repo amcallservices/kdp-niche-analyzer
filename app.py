@@ -7,28 +7,28 @@ import re
 
 # 1. Configurazione Pagina
 st.set_page_config(
-    page_title="KDP Niche Analyzer Ultimate", 
+    page_title="KDP Niche Analyzer Ultimate 2026", 
     page_icon="💎", 
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# 2. CSS per UI e Colori Professionali
+# 2. CSS per UI Professionale (Fix Colori per Tema Scuro/Chiaro)
 st.markdown("""
     <style>
         [data-testid="collapsedControl"] { display: none; }
-        .stMetric { background-color: #f8f9fa !important; padding: 15px; border-radius: 10px; border-left: 5px solid #1f77b4; box-shadow: 1px 1px 5px rgba(0,0,0,0.05); }
-        [data-testid="stMetricValue"] { color: #1e1e1e !important; }
-        [data-testid="stMetricLabel"] { color: #444444 !important; font-weight: bold; }
-        .keyword-box { padding: 12px; background-color: #e8f4f8; color: #003344 !important; border-radius: 8px; margin-bottom: 12px; border-left: 5px solid #00a8cc; font-weight: 500;}
-        .generated-kw-box { background-color: #ffffff; border: 1px solid #ddd; padding: 10px; border-radius: 5px; margin-top: 5px; cursor: pointer; border-left: 3px solid #ff9900; }
+        .stMetric { background-color: #ffffff !important; padding: 15px; border-radius: 10px; border: 1px solid #e0e0e0; border-left: 5px solid #ff9900; box-shadow: 2px 2px 5px rgba(0,0,0,0.05); }
+        [data-testid="stMetricValue"] { color: #1e1e1e !important; font-size: 1.8rem !important; }
+        [data-testid="stMetricLabel"] { color: #555555 !important; font-weight: bold !important; }
+        .keyword-box { padding: 12px; background-color: #f0f7f9; color: #004455 !important; border-radius: 8px; margin-bottom: 12px; border-left: 5px solid #00a8cc; font-weight: 500;}
+        .gen-btn-box { background-color: #ffffff; border: 1px solid #d1d5db; padding: 10px; border-radius: 8px; margin-bottom: 10px; }
     </style>
 """, unsafe_allow_html=True)
 
 # LA TUA CHIAVE API
 API_KEY = "ce57dc2330590954355f5c12171c7ce9"
 
-# Inizializzazione Session State per la Keyword automatica
+# Inizializzazione Session State per il trasferimento automatico della keyword
 if 'target_keyword' not in st.session_state:
     st.session_state['target_keyword'] = ""
 
@@ -36,14 +36,12 @@ if 'target_keyword' not in st.session_state:
 
 def stima_vendite_mensili(bsr):
     if bsr <= 0: return 0
-    if bsr <= 100: return 2000
-    if bsr <= 1000: return 500
-    if bsr <= 5000: return 150
-    if bsr <= 10000: return 80
-    if bsr <= 30000: return 30
+    if bsr <= 1000: return 600
+    if bsr <= 5000: return 200
+    if bsr <= 15000: return 90
+    if bsr <= 50000: return 30
     if bsr <= 100000: return 10
-    if bsr <= 250000: return 3
-    return 0
+    return 2
 
 def calcola_royalty_netta(prezzo, pagine, colore):
     if prezzo <= 0: return 0.0
@@ -55,17 +53,7 @@ def calcola_royalty_netta(prezzo, pagine, colore):
     royalty = (prezzo * 0.60) - costo_stampa
     return round(royalty, 2) if royalty > 0 else 0.0
 
-def genera_keyword_alternative(keyword):
-    kw = keyword.lower().strip()
-    return [
-        f"<b>{kw.title()} per Principianti:</b> Target ampio, guida step-by-step.",
-        f"<b>Esercizi di {kw.title()} / Workbook:</b> Formato pratico ad altissima rotazione.",
-        f"<b>{kw.title()} per Donne / Senior:</b> Nicchia demografica a bassa competizione.",
-        f"<b>Manuale Completo di {kw.title()}:</b> Posizionamento Premium (Prezzi alti).",
-        f"<b>Bundle: {kw.title()} (3 in 1):</b> Dominanza totale del mercato."
-    ]
-
-# --- CORE SCRAPER CON DEEP SCAN ---
+# --- CORE SCRAPER (15 LIBRI + DEEP SCAN) ---
 
 def get_amazon_data(marketplace, keyword, pagine, colore):
     domains = {"Italia": "amazon.it", "USA": "amazon.com", "Spagna": "amazon.es", "Francia": "amazon.fr", "Germania": "amazon.de"}
@@ -73,143 +61,130 @@ def get_amazon_data(marketplace, keyword, pagine, colore):
     country = 'it' if marketplace == "Italia" else 'us'
     target_url = f"https://www.{domain}/s?k={keyword.replace(' ', '+')}&i=stripbooks"
     
-    payload = {'api_key': API_KEY, 'url': target_url, 'render': 'true', 'country_code': country}
-    
     try:
-        res = requests.get('http://api.scraperapi.com', params=payload)
+        res = requests.get('http://api.scraperapi.com', params={'api_key': API_KEY, 'url': target_url, 'render': 'true', 'country_code': country})
         if res.status_code != 200: return None
         soup = BeautifulSoup(res.text, 'html.parser')
-        results = []
         items = soup.find_all('div', {'data-component-type': 's-search-result'})[:15]
         
-        progress_text = st.empty()
+        results = []
         progress_bar = st.progress(0)
         
         for i, item in enumerate(items):
             title = item.h2.text.strip() if item.h2 else "N/A"
-            progress_text.info(f"🔍 Analisi libro {i+1}/{len(items)}: {title[:30]}...")
-            
             img_tag = item.find('img', class_='s-image')
-            cover_url = img_tag['src'] if img_tag and 'src' in img_tag.attrs else ""
+            cover_url = img_tag['src'] if img_tag else ""
             
+            # Prezzo
             p_whole = item.find('span', 'a-price-whole')
             p_frac = item.find('span', 'a-price-fraction')
-            price = 0.0
-            if p_whole and p_frac:
-                try: price = float(f"{p_whole.text.replace(',','').replace('.','')}.{p_frac.text}")
-                except: price = 0.0
+            price = float(f"{p_whole.text.replace(',','').replace('.','')}.{p_frac.text}") if p_whole and p_frac else 0.0
             
+            # Recensioni
             rev_tag = item.find('span', {'class': 'a-size-base s-underline-text'})
             reviews = int(re.sub(r'\D', '', rev_tag.text)) if rev_tag else 0
             
+            # Deep Scan per BSR e Editore
             bsr = 0
-            is_self_pub = False
+            is_self = False
             link_tag = item.find('a', class_='a-link-normal s-no-outline')
-            
-            if link_tag and 'href' in link_tag.attrs:
+            if link_tag:
                 book_url = f"https://www.{domain}" + link_tag['href']
-                res_deep = requests.get('http://api.scraperapi.com', params={'api_key': API_KEY, 'url': book_url, 'country_code': country})
-                if res_deep.status_code == 200:
-                    deep_text = BeautifulSoup(res_deep.text, 'html.parser').get_text().lower()
-                    bsr_match = re.search(r'(?:n\.|#)\s*([0-9.,]+)\s*in', deep_text)
-                    if bsr_match:
-                        try: bsr = int(bsr_match.group(1).replace('.', '').replace(',', ''))
-                        except: bsr = 0
-                    is_self_pub = "indipendentemente pubblicato" in deep_text or "independently published" in deep_text
-            
-            vendite_stimate = stima_vendite_mensili(bsr)
+                res_d = requests.get('http://api.scraperapi.com', params={'api_key': API_KEY, 'url': book_url, 'country_code': country})
+                if res_d.status_code == 200:
+                    d_soup = BeautifulSoup(res_d.text, 'html.parser').get_text().lower()
+                    bsr_m = re.search(r'(?:n\.|#)\s*([0-9.,]+)\s*in', d_soup)
+                    if bsr_m: bsr = int(bsr_m.group(1).replace('.', '').replace(',', ''))
+                    is_self = "indipendentemente pubblicato" in d_soup or "independently published" in d_soup
+
             royalty = calcola_royalty_netta(price, pagine, colore)
+            vendite = stima_vendite_mensili(bsr)
+            
             results.append({
-                "Copertina": cover_url, "Libro": title, "Prezzo (€/$)": price, 
-                "Royalty Netta": str(royalty), "Recensioni": reviews, "BSR": bsr if bsr > 0 else "N/D",
-                "Vendite/Mese": vendite_stimate, "Utile/Mese Stimato": str(round(vendite_stimate * royalty, 2)),
-                "Self-Published": "Sì" if is_self_pub else "No"
+                "Copertina": cover_url, "Libro": title, "Prezzo": price, 
+                "Royalty": royalty, "Recensioni": reviews, "BSR": bsr if bsr > 0 else "N/D",
+                "Vendite/Mese": vendite, "Self-Pub": "Sì" if is_self else "No"
             })
             progress_bar.progress((i + 1) / len(items))
             
-        progress_text.empty()
-        progress_bar.empty()
         return pd.DataFrame(results)
     except: return None
 
 # --- UI SIDEBAR ---
 with st.sidebar:
-    st.title("🎯 KDP Analyzer Gold")
-    
-    if st.button("🔄 Nuova Ricerca", use_container_width=True):
+    st.title("🛡️ KDP Strategy Lab")
+    if st.button("🔄 Reset Totale"):
         st.session_state['target_keyword'] = ""
         st.rerun()
-    
+
     st.markdown("---")
-    
-    # --- SISTEMA GENERATORE KEYWORD PROFESSIONALE ---
-    st.subheader("🛠️ Generatore Keyword Strategica")
-    with st.expander("Sviluppa Nicchia"):
+    st.subheader("🛠️ Ingegneria della Keyword")
+    with st.expander("Generatore Automatico", expanded=True):
         arg = st.text_input("Argomento:", placeholder="es. Yoga")
-        target = st.text_input("Target:", placeholder="es. Anziani")
-        ben = st.text_input("Beneficio:", placeholder="es. Mobilità articolare")
+        pub = st.text_input("Target:", placeholder="es. Donne in Gravidanza")
+        ben = st.text_input("Beneficio:", placeholder="es. Alleviare il mal di schiena")
         
-        if arg and target and ben:
-            st.write("Scegli un angolo d'attacco:")
-            
-            # Opzione 1: Strategica
-            k1 = f"{arg} per {target}: {ben}"
-            if st.button(f"👉 {k1}"):
+        if arg and pub and ben:
+            st.caption("Clicca per caricare la keyword:")
+            # Strategia 1: Focus Risultato
+            k1 = f"{arg} per {pub}: {ben}"
+            if st.button(f"🎯 {k1}"): 
                 st.session_state['target_keyword'] = k1
                 st.rerun()
-                
-            # Opzione 2: Pratica
-            k2 = f"Esercizi di {arg} per {target} per migliorare {ben}"
-            if st.button(f"👉 {k2}"):
+            # Strategia 2: Focus Pratico
+            k2 = f"Esercizi di {arg} per {pub} per {ben}"
+            if st.button(f"📦 {k2}"): 
                 st.session_state['target_keyword'] = k2
-                st.rerun()
-                
-            # Opzione 3: Guida
-            k3 = f"Manuale di {arg} per {target}: Come ottenere {ben}"
-            if st.button(f"👉 {k3}"):
-                st.session_state['target_keyword'] = k3
                 st.rerun()
 
     st.markdown("---")
-    mkt = st.selectbox("Marketplace", ["Italia", "USA", "Spagna", "Francia", "Germania"])
-    
-    # Campo di input collegato al session state per il riempimento automatico
-    key = st.text_input("🔍 Incolla qui la Keyword per l'Analisi", value=st.session_state['target_keyword'])
-    
-    pagine = st.number_input("Pagine libro", min_value=24, value=120)
+    mkt = st.selectbox("Mercato", ["Italia", "USA", "Spagna", "Francia", "Germania"])
+    key_input = st.text_input("🔍 Keyword sotto Analisi", value=st.session_state['target_keyword'])
+    pagine = st.number_input("Pagine stimate", min_value=24, value=120)
     colore = st.selectbox("Interno", ["Bianco e Nero", "A Colori (Premium)"])
-    obiettivo = st.radio("Obiettivo:", ["Reddito Passivo (Royalty)", "Lead Generation", "Brand / Authority"])
+    obiettivo = st.radio("Obiettivo:", ["Royalty", "Lead Gen", "Authority"])
     
-    run = st.button("AVVIA ANALISI", type="primary", use_container_width=True)
+    run = st.button("LANCIA ANALISI PROFONDA", type="primary", use_container_width=True)
 
 # --- LOGICA MAIN ---
-if run and key:
-    st.info(f"Avvio analisi su 15 libri per '{key}'...")
-    df = get_amazon_data(mkt, key, pagine, colore)
-    
-    if df is not None and not df.empty:
-        st.success("Dati estratti!")
-        st.dataframe(df, column_config={"Copertina": st.column_config.ImageColumn("Cover")}, use_container_width=True, hide_index=True)
-        
-        # Report Professionale (Semplificato per stabilità)
-        df_calc = df.copy()
-        df_calc["Utile Num"] = pd.to_numeric(df_calc["Utile/Mese Stimato"]).fillna(0)
-        tot_utile = df_calc["Utile Num"].sum()
-        
-        st.markdown("---")
-        st.header(f"📊 Report Professionale KDP: {key.upper()}")
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Prezzo Medio", f"{df['Prezzo (€/$)'].mean():.2f} €")
-        c2.metric("Mercato (Top 15)", f"{int(tot_utile)} €/mese")
-        c3.metric("Self-Pub Ratio", f"{int((len(df[df['Self-Published'] == 'Sì']) / len(df)) * 100)}%")
-
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("🎯 Verdetto Strategico")
-            if tot_utile > 500: st.success("✅ Nicchia Profittevole rilevata.")
-            else: st.warning("⚠️ Volumi di vendita bassi o prezzi non ottimizzati.")
+if run and key_input:
+    with st.spinner("Esecuzione Niche Engineering..."):
+        df = get_amazon_data(mkt, key_input, pagine, colore)
+        if df is not None:
+            st.success("Dati Ricevuti!")
+            st.dataframe(df, column_config={"Copertina": st.column_config.ImageColumn("Cover")}, use_container_width=True, hide_index=True)
             
-        with col2:
-            st.subheader("💡 Keyword Alternative")
-            for alt in genera_keyword_alternative(key):
-                st.markdown(f"<div class='keyword-box'>{alt}</div>", unsafe_allow_html=True)
+            # Analisi Professionale
+            avg_p = df["Prezzo"].mean()
+            avg_r = df["Royalty"].mean()
+            self_ratio = (len(df[df["Self-Pub"] == "Sì"]) / len(df)) * 100
+            
+            st.markdown("---")
+            st.header(f"📈 Verdetto Professionale: {key_input.upper()}")
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Prezzo Medio", f"{avg_p:.2f} €")
+            c2.metric("Royalty Media", f"{avg_r:.2f} €")
+            c3.metric("Self-Pub Ratio", f"{int(self_ratio)}%")
+            
+            # Calcolo Opportunity Score Avanzato
+            score = 50
+            if avg_p > 13: score += 20
+            if self_ratio > 40: score += 20
+            if df["Recensioni"].mean() < 200: score += 10
+            c4.metric("Opportunity Score", f"{score}/100")
+
+            col_a, col_b = st.columns(2)
+            with col_a:
+                st.subheader("📝 Analisi Fattibilità")
+                if score >= 70: st.success("✅ **NICCHIA VALIDATA**: Alta presenza di Self-Publisher e margini ottimi. Consigliato l'ingresso immediato.")
+                elif avg_p < 11: st.error("❌ **MARGINI INSUFFICIENTI**: I prezzi sono troppo bassi per sostenere Amazon Ads. Crea un Bundle per alzare il prezzo.")
+                else: st.warning("⚠️ **CONCORRENZA NOTEVOLE**: I dati sono misti. Richiede una copertina eccezionale per distinguersi.")
+
+            with col_b:
+                st.subheader("💡 Espansione Nicchia")
+                kw = key_input.lower()
+                st.markdown(f"<div class='keyword-box'><b>Versione Workbook:</b> Libro di esercizi {kw}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='keyword-box'><b>Versione Strategica:</b> {kw} per principianti</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='keyword-box'><b>Versione Premium:</b> Manuale definitivo di {kw}</div>", unsafe_allow_html=True)
+        else:
+            st.error("Errore di connessione. Amazon ha limitato la richiesta, riprova tra 60 secondi.")
