@@ -10,7 +10,7 @@ import openai
 # 1. DESIGN SYSTEM ELITE (SIDEBAR FISSA & TESTO NERO)
 # ==============================================================================
 st.set_page_config(
-    page_title="KDP OMNI-REASONER 8.4", 
+    page_title="KDP OMNI-REASONER 8.5", 
     page_icon="⚡", 
     layout="wide",
     initial_sidebar_state="expanded"
@@ -27,7 +27,7 @@ st.markdown("""
         section[data-testid="stSidebar"] { 
             background-color: #0d1117 !important; 
             border-right: 1px solid #30363d;
-            min-width: 450px !important;
+            min-width: 480px !important;
         }
 
         /* METRICHE */
@@ -57,7 +57,7 @@ st.markdown("""
         }
 
         /* FORZATURA TESTO GENERALE NERO NELLE SEZIONI RISULTATI */
-        .stMarkdown p, .stMarkdown li { color: #000000 !important; }
+        .stMarkdown p, .stMarkdown li, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 { color: #000000 !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -71,7 +71,7 @@ try:
     client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
     API_READY = True
 except:
-    st.error("⚠️ OpenAI API Key non trovata.")
+    st.error("⚠️ OpenAI API Key non trovata nei Secret.")
     API_READY = False
 
 if 'results_df' not in st.session_state: st.session_state.results_df = None
@@ -80,7 +80,7 @@ if 'score' not in st.session_state: st.session_state.score = 0
 if 'kw_active' not in st.session_state: st.session_state.kw_active = ""
 
 # ==============================================================================
-# 3. MOTORE DI SCRAPING TURBO (ANT + SCRAPERAPI FAILOVER)
+# 3. MOTORE DI SCRAPING TURBO (ANT + SCRAPERAPI)
 # ==============================================================================
 def fetch_page(url, provider="ant"):
     if provider == "ant":
@@ -99,7 +99,7 @@ def run_expert_scan(mkt, keyword):
     seen_titles = set()
     p_bar = st.progress(0)
     
-    for page in range(1, 8): 
+    for page in range(1, 10): 
         if len(unique_results) >= 40: break
         target_url = f"https://www.{domain}/s?k={keyword.replace(' ', '+')}&i=stripbooks&page={page}"
         html = fetch_page(target_url, "ant")
@@ -122,12 +122,13 @@ def run_expert_scan(mkt, keyword):
             if price > 0:
                 seen_titles.add(title)
                 bsr = 0
+                # Regex flessibile per trovare il BSR nell'HTML puro
                 bsr_match = re.search(r'n\.\s*([0-9.,]+)\s*in', full_text)
                 if bsr_match: bsr = int(bsr_match.group(1).replace('.', '').replace(',', ''))
                 unique_results.append({
                     "Preview": item.find('img', class_='s-image')['src'] if item.find('img', class_='s-image') else "",
                     "Titolo": title, "Prezzo": price, "BSR": bsr if bsr > 0 else "N/D", 
-                    "Self": "Sì" if any(x in full_text for x in ['independently', 'kdp', 'createspace']) else "No"
+                    "Self": "Sì" if any(x in full_text for x in ['independently', 'kdp', 'createspace', 'indipendente']) else "No"
                 })
             if len(unique_results) >= 40: break
         p_bar.progress(len(unique_results) / 40 if len(unique_results) <= 40 else 1.0)
@@ -135,57 +136,63 @@ def run_expert_scan(mkt, keyword):
     return pd.DataFrame(unique_results)
 
 # ==============================================================================
-# 4. SIDEBAR FISSA
+# 4. SIDEBAR FISSA (FULL GENRES REINSTATED)
 # ==============================================================================
 with st.sidebar:
-    st.title("🛡️ EXPERT LAB 8.4")
+    st.title("🛡️ STRATEGY LAB 8.5")
     if st.button("🔄 RESET"):
         for key in ['results_df', 'ebook_ideas', 'kw_active', 'score']: st.session_state[key] = None if key != 'score' else 0
         st.rerun()
 
     st.markdown("---")
-    p_type = st.selectbox("Genere", ["Saggio", "Manuale", "Business", "Romanzo", "Ricettario", "Psicologico"])
-    p_desc = st.text_area("Cosa vuoi scrivere?", height=100)
-    p_target = st.text_input("Target", placeholder="Chi leggerà?")
+    # LISTA GENERI COMPLETA RIPRISTINATA
+    p_type = st.selectbox("Genere / Formato", [
+        "Saggio Scientifico", "Quiz Scientifico", "Manuale Tecnico", 
+        "Religioso / Teologico", "Spirituale / Esoterico", "Meditazione / Mindfulness", 
+        "Business e Marketing", "Romanzo Rosa", "Thriller / Noir", 
+        "Fantasy", "Fantascienza", "Manuale Psicologico", "Biografia", "Ricettario"
+    ])
+    p_desc = st.text_area("Descrizione Progetto", placeholder="Di cosa parla il tuo libro?", height=100)
+    p_target = st.text_input("Identikit Lettore", placeholder="Chi leggerà questo libro?")
     
     if st.button("🧠 GENERA KEYWORD AI", type="primary") and API_READY:
-        prompt = f"Keyword per: {p_type}. Descrizione: {p_desc}. Target: {p_target}. Rispondi: KEYWORD: [testo] | LOGICA: [testo]"
+        prompt = f"Genera UNA keyword per un {p_type}. Descrizione: {p_desc}. Target: {p_target}. Rispondi: KEYWORD: [testo] | LOGICA: [testo]"
         res = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}]).choices[0].message.content
         st.session_state.kw_active = res.split("KEYWORD:")[1].split("|")[0].strip()
 
     if st.session_state.kw_active:
         final_q = st.text_input("Keyword finale:", value=st.session_state.kw_active)
         mkt = st.selectbox("Marketplace", ["Italia", "USA", "Spagna", "Francia", "Germania"])
-        run_btn = st.button("🚀 ANALIZZA 40 LIBRI", use_container_width=True)
+        run_btn = st.button("🚀 ANALIZZA 40 LIBRI UNICI", use_container_width=True)
 
 # ==============================================================================
-# 5. DASHBOARD (TESTO IN NERO)
+# 5. DASHBOARD (BLACK TEXT PERSISTENCE)
 # ==============================================================================
 if 'run_btn' in locals() and run_btn and API_READY:
-    with st.spinner("Analisi in corso..."):
+    with st.spinner("Analisi Sniper in corso..."):
         df = run_expert_scan(mkt, final_q)
         if not df.empty:
             st.session_state.results_df = df
             avg_p = df['Prezzo'].mean()
             self_r = (len(df[df['Self'] == "Sì"]) / len(df)) * 100
-            st.session_state.score = 40 + (30 if avg_p > 13 else 0) + (30 if self_r > 40 else 0)
+            st.session_state.score = 40 + (30 if avg_p > 13.5 else 0) + (30 if self_r > 40 else 0)
             
             if st.session_state.score >= 60:
-                p_ebook = f"Analisi OK per '{final_q}'. Suggerisci 3 titoli e 3 trame. Target: {p_target}. Formato: TITOLO: [testo] | TRAMA: [testo]"
+                p_ebook = f"Analisi POSITIVA per '{final_q}' ({p_type}). Genera 3 titoli e 3 trame (100 parole). Formato: TITOLO: [testo] | TRAMA: [testo]"
                 st.session_state.ebook_ideas = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": p_ebook}]).choices[0].message.content
             else:
                 st.session_state.ebook_ideas = "NEGATIVE"
 
+# VISUALIZZAZIONE RISULTATI
 if st.session_state.results_df is not None:
-    st.header(f"📊 Risultati Analisi: {final_q.upper()}")
+    st.header(f"📊 Report Analisi: {final_q.upper()}")
     
-    # SPIEGAZIONE (TESTO NERO)
     st.markdown("""
     <div class="explanation-box">
-        <b>💡 Guida all'Analisi Strategica:</b><br>
-        • <b>BSR (Best Sellers Rank):</b> Indica quanto velocemente vende un libro. Più è basso, meglio è.<br>
-        • <b>Indie Ratio:</b> Percentuale di autori Self-Publisher. Sopra il 40% indica spazio per te.<br>
-        • <b>Opportunity Score:</b> Voto da 0 a 100. Sopra 60 è una miniera d'oro.
+        <b>💡 Glossario Tecnico (Testo Nero):</b><br>
+        • <b>BSR (Best Sellers Rank):</b> La classifica di vendita. Più è basso, più il libro vende ogni giorno.<br>
+        • <b>Indie Ratio:</b> Percentuale di autori Self-Publisher. Se è alta, c'è spazio per un autore indipendente.<br>
+        • <b>Opportunity Score:</b> Valutazione complessiva. Sopra 60 è una nicchia profittevole.
     </div>
     """, unsafe_allow_html=True)
     
@@ -196,8 +203,8 @@ if st.session_state.results_df is not None:
     c2.metric("Indie Ratio", f"{int((len(st.session_state.results_df[st.session_state.results_df['Self'] == 'Sì']) / len(st.session_state.results_df)) * 100)}%")
 
     if st.session_state.score >= 60:
-        st.success(f"✅ VERDETTO POSITIVO ({st.session_state.score}/100)")
-        st.header("🎯 Proposte eBook (Black Edition)")
+        st.success(f"✅ ANALISI POSITIVA ({st.session_state.score}/100)")
+        st.header("🎯 Proposte eBook Consigliate")
         ebooks = st.session_state.ebook_ideas.split("TITOLO:")
         for eb in ebooks[1:]:
             parts = eb.split("| TRAMA:")
@@ -205,4 +212,4 @@ if st.session_state.results_df is not None:
                 st.markdown(f'<div class="ebook-suggestion-card"><span class="ebook-title">📘 {parts[0].strip()}</span><p class="ebook-plot">{parts[1].strip()}</p></div>', unsafe_allow_html=True)
     else:
         st.markdown(f'<div class="negative-verdict">❌ ANALISI NEGATIVA ({st.session_state.score}/100)</div>', unsafe_allow_html=True)
-        st.warning("⚠️ Nicchia sconsigliata: prova a rigenerare la keyword.")
+        st.warning("⚠️ Parametri insufficienti. Si consiglia di rigenerare la keyword AI.")
