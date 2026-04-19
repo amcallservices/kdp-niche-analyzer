@@ -8,11 +8,11 @@ import io
 import urllib.parse
 
 # ==============================================================================
-# 1. CONFIGURAZIONE UI & SIDEBAR DARK
+# 1. CONFIGURAZIONE UI & SIDEBAR "CLINICA"
 # ==============================================================================
 st.set_page_config(
-    page_title="KDP NICHE & PERSONA VALIDATOR - ELITE",
-    page_icon="👤",
+    page_title="KDP SURGICAL NICHE VALIDATOR v2.0",
+    page_icon="🩺",
     layout="wide",
     initial_sidebar_state="expanded" 
 )
@@ -23,54 +23,45 @@ st.markdown("""
         [data-testid="collapsedControl"] { display: none !important; }
         
         section[data-testid="stSidebar"] {
-            min-width: 420px !important;
-            max-width: 420px !important;
+            min-width: 440px !important;
+            max-width: 440px !important;
             background-color: #0d1117 !important;
             border-right: 1px solid #30363d;
         }
-        [data-testid="stSidebar"] .stMarkdown p, [data-testid="stSidebar"] label, 
-        [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3,
-        [data-testid="stSidebar"] .stExpander p { color: #f0f6fc !important; }
-        [data-testid="stSidebar"] input, [data-testid="stSidebar"] select {
-            background-color: #161b22 !important; color: #ffffff !important; border: 1px solid #30363d !important;
-        }
-
-        .stMetric {
-            background-color: #ffffff !important; border: 1px solid #d0d7de !important;
-            border-left: 8px solid #0969da !important; padding: 20px !important;
-            border-radius: 12px !important; box-shadow: 0 4px 10px rgba(0,0,0,0.08) !important;
-        }
-        [data-testid="stMetricValue"] { color: #1f2328 !important; font-weight: 800 !important; }
-
-        .editorial-card {
-            background-color: #ffffff; border: 1px solid #e1e4e8;
-            padding: 25px; border-radius: 12px; margin-bottom: 20px;
-            border-top: 5px solid #f78166; box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-        }
-        .title-option { color: #cf222e; font-size: 1.3rem; font-weight: bold; margin-bottom: 10px; display: block; }
-        .plot-text { color: #24292f; font-style: italic; line-height: 1.6; }
         
-        .keyword-alt-card {
-            background-color: #f3e5f5; border: 1px solid #d1c4e9;
-            padding: 15px; border-radius: 8px; margin-bottom: 10px;
-            border-left: 5px solid #673ab7; color: #4527a0 !important;
+        /* Diagnosi Box nella Sidebar */
+        .diagnosis-box {
+            background-color: #161b22;
+            border: 1px solid #3182ce;
+            padding: 15px;
+            border-radius: 8px;
+            color: #90cdf4;
+            font-size: 0.9rem;
+            margin-bottom: 15px;
         }
 
-        .persona-card {
-            background-color: #f0f9ff; border: 1px solid #bae6fd;
-            padding: 20px; border-radius: 10px; color: #0369a1;
-            margin-bottom: 20px; border-left: 5px solid #0369a1;
-        }
+        /* Stile Metriche e Card */
+        .stMetric { background-color: #ffffff !important; border-left: 8px solid #3182ce !important; border-radius: 12px !important; }
+        .keyword-alt-card { background-color: #f3e5f5; border-left: 5px solid #673ab7; padding: 15px; border-radius: 8px; color: #4527a0 !important; }
+        .editorial-card { background-color: #ffffff; border-top: 5px solid #f78166; padding: 25px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .persona-card { background-color: #f0f9ff; border-left: 5px solid #0369a1; padding: 20px; border-radius: 10px; color: #0369a1; }
     </style>
 """, unsafe_allow_html=True)
 
-# --- CHIAVE API WEBSCRAPING.AI (Sostituisci con la tua) ---
-WS_API_KEY = "INSERISCI_QUI_LA_TUA_CHIAVE"
+# --- CHIAVE API WEBSCRAPING.AI ---
+WS_API_KEY = "LA_TUA_CHIAVE_API"
 
 # ==============================================================================
-# 2. LOGICA DI BUSINESS
+# 2. MOTORE DI RAGIONAMENTO CLINICO
 # ==============================================================================
-class KDPFreeTools:
+class KDPDiagnostic:
+    @staticmethod
+    def generate_surgical_keyword(type_book, target, pain, dream):
+        """Ragionamento professionale per la creazione della cura editoriale."""
+        # Logica: Strumento + Patologia + Paziente + Prognosi
+        kw = f"{type_book} per {pain} in {target}: Protocollo per {dream}"
+        return kw
+
     @staticmethod
     def get_amazon_suggestions(keyword, mkt_code):
         mkt_map = {"Italia": "it", "USA": "com", "Spagna": "es", "Francia": "fr", "Germania": "de"}
@@ -79,39 +70,13 @@ class KDPFreeTools:
         headers = {"User-Agent": "Mozilla/5.0"}
         try:
             r = requests.get(url, headers=headers, timeout=5)
-            if r.status_code == 200: return [s['value'] for s in r.json()['suggestions']]
+            return [s['value'] for s in r.json()['suggestions']] if r.status_code == 200 else []
         except: return []
-        return []
-
-class KDPBrain:
-    @staticmethod
-    def estimate_sales(bsr):
-        if bsr <= 0: return 0
-        if bsr <= 1500: return 650
-        if bsr <= 10000: return 150
-        return 5
-
-    @staticmethod
-    def calculate_royalty(price, pages, is_color):
-        if price <= 0: return 0.0
-        cost = 2.15 if not is_color else 0.60 + (pages * 0.045)
-        if pages > 108 and not is_color: cost = 0.60 + (pages * 0.012)
-        return round((price * 0.60) - cost, 2)
-
-    @staticmethod
-    def generate_editorial_proposal(type_book, target, pain, dream, keyword):
-        titles = [
-            f"{type_book.upper()}: Basta {pain.capitalize()} per {target}",
-            f"{keyword.title()}: Il Metodo per {dream}",
-            f"Oltre {pain.capitalize()}: {type_book} Strategico per {target}"
-        ]
-        plot = f"Questo {type_book} è stato progettato per aiutare ogni {target} a superare {pain} e raggiungere finalmente {dream}."
-        return titles, plot
 
 # ==============================================================================
-# 3. MOTORE DI SCRAPING (WEBSCRAPING.AI)
+# 3. CORE SCRAPER (WEBSCRAPING.AI)
 # ==============================================================================
-def scrape_books_ws(mkt, keyword, pages, is_color):
+def scrape_books_surgical(mkt, keyword, pages, is_color):
     domains = {"Italia": "amazon.it", "USA": "amazon.com", "Spagna": "amazon.es", "Francia": "amazon.fr", "Germania": "amazon.de"}
     domain = domains.get(mkt, "amazon.it")
     target_url = f"https://www.{domain}/s?k={keyword.replace(' ', '+')}&i=stripbooks"
@@ -131,128 +96,98 @@ def scrape_books_ws(mkt, keyword, pages, is_color):
             p_w = item.find('span', 'a-price-whole')
             p_f = item.find('span', 'a-price-fraction')
             price = float(f"{p_w.text.replace(',','').replace('.','')}.{p_f.text}") if p_w and p_f else 0.0
-            bsr = 0
-            is_self = False
-            link_tag = item.find('a', class_='a-link-normal s-no-outline')
-            if link_tag:
-                book_url = f"https://www.{domain}" + link_tag['href']
-                res_p = requests.get('https://api.webscraping.ai/html', params={'api_key': WS_API_KEY, 'url': book_url, 'proxy': 'residential'})
-                if res_p.status_code == 200:
-                    ps = BeautifulSoup(res_p.text, 'html.parser').get_text().lower()
-                    m = re.search(r'(?:n\.|#)\s*([0-9.,]+)\s*in', ps)
-                    if m: bsr = int(m.group(1).replace('.', '').replace(',', ''))
-                    is_self = any(x in ps for x in ["indipendentemente pubblicato", "independently published", "kdp"])
-            roy = KDPBrain.calculate_royalty(price, pages, is_color)
-            sales = KDPBrain.estimate_sales(bsr)
+            roy = round((price * 0.60) - (2.15 if pages <= 108 else 0.60 + (pages * 0.012)), 2)
             results.append({
                 "Copertina": img, "Titolo": title, "Prezzo": price, 
-                "Royalty_Val": roy, "BSR": bsr if bsr > 0 else "N/D", 
-                "Vendite": sales, "Profitto": round(sales * roy, 2), "Self-Pub": "Sì" if is_self else "No"
+                "Royalty_Est": roy, "Self-Pub": "Sì" if "independently" in title.lower() or "pubblicato" in title.lower() else "N/D"
             })
             p_bar.progress((i + 1) / len(items))
         return pd.DataFrame(results)
     except: return None
 
 # ==============================================================================
-# 4. SIDEBAR: PERSONA & TIPOLOGIA LIBRO (MIRATA)
+# 4. SIDEBAR: PROTOCOLLO DIAGNOSTICO
 # ==============================================================================
-if 'kw_active' not in st.session_state:
-    st.session_state['kw_active'] = ""
+if 'kw_active' not in st.session_state: st.session_state['kw_active'] = ""
 
 with st.sidebar:
-    st.title("🛡️ STRATEGY COMMAND")
-    
-    if st.button("🔄 NUOVA ANALISI", use_container_width=True):
+    st.title("🩺 KDP SURGICAL LAB")
+    st.markdown("""<div class="diagnosis-box"><b>OBIETTIVO:</b> Eseguire una dissezione del mercato per identificare nervi scoperti e nicchie non curate dai grandi editori.</div>""", unsafe_allow_html=True)
+
+    if st.button("🔄 RESET PROTOCOLLO", use_container_width=True):
         st.session_state['kw_active'] = ""; st.rerun()
 
     st.markdown("---")
-    st.subheader("👤 Identikit Persona & Libro")
-    with st.expander("Parametri Mirati", expanded=True):
-        p_type = st.text_input("Angolo Editoriale", placeholder="es. Manuale, Workbook, Raccolta")
-        p_target = st.text_input("Target", placeholder="es. Donne in carriera")
-        p_pain = st.text_input("Problema", placeholder="es. gestione tempo")
-        p_dream = st.text_input("Risultato", placeholder="es. equilibrio vita-lavoro")
+    st.subheader("📋 Anamnesi del Mercato")
+    with st.expander("Parametri Diagnostici", expanded=True):
+        p_type = st.selectbox("Strumento (Tipo)", ["Manuale Pratico", "Workbook di Esercizi", "Ricettario Strategico", "Diario di Trasformazione", "Guida Passo-Passo"])
+        p_target = st.text_input("Anatomia (Target)", placeholder="es. Imprenditori in Burnout")
+        p_pain = st.text_input("Patologia (Dolore)", placeholder="es. Insonnia Cronica")
+        p_dream = st.text_input("Prognosi (Sogno)", placeholder="es. Sonno Profondo in 7 giorni")
     
-    # GENERAZIONE KEYWORD MIRATA
-    if p_type and p_pain and p_target:
-        k_sug = f"{p_type.capitalize()} di {p_pain} per {p_target}"
-        if st.button(f"🎯 Genera: {k_sug}", use_container_width=True):
-            st.session_state['kw_active'] = k_sug; st.rerun()
+    # RAGIONAMENTO CHIRURGICO PER GENERAZIONE KEYWORD
+    if p_target and p_pain and p_dream:
+        surgical_kw = KDPDiagnostic.generate_surgical_keyword(p_type, p_target, p_pain, p_dream)
+        st.info(f"👨‍⚕️ **Diagnosi:** Il paziente cerca un '{p_type}' perché la 'patologia' ({p_pain}) è insopportabile.")
+        if st.button(f"💉 INIETTA KEYWORD: {surgical_kw}", use_container_width=True):
+            st.session_state['kw_active'] = surgical_kw; st.rerun()
 
     st.markdown("---")
-    mkt = st.selectbox("Marketplace", ["Italia", "USA", "Spagna", "Francia", "Germania"])
-    query = st.text_input("🔍 Keyword Focus", value=st.session_state['kw_active'])
+    mkt = st.selectbox("Mercato Operativo", ["Italia", "USA", "Spagna", "Francia", "Germania"])
+    query = st.text_input("🔍 Bisturi (Keyword Focus)", value=st.session_state['kw_active'])
     
     if query:
-        with st.expander("💡 Suggerimenti Autocomplete"):
-            suggs = KDPFreeTools.get_amazon_suggestions(query, mkt)
+        with st.expander("💡 Espansione Diagnostica (Autocomplete)"):
+            suggs = KDPDiagnostic.get_amazon_suggestions(query, mkt)
             for s in suggs:
                 if st.button(f"🔎 {s}", key=f"s_{s}", use_container_width=True):
                     st.session_state['kw_active'] = s; st.rerun()
 
     st.markdown("---")
-    pgs = st.number_input("Pagine", min_value=24, value=120)
-    is_color = st.checkbox("Stampa a Colori")
-    run = st.button("LANCIA ANALISI", type="primary", use_container_width=True)
+    pgs = st.number_input("Pagine Stimate", min_value=24, value=120)
+    run = st.button("LANCIA DISSEZIONE NICCHIA", type="primary", use_container_width=True)
 
 # ==============================================================================
-# 5. DASHBOARD PRINCIPALE
+# 5. DASHBOARD: VERDETTO CLINICO
 # ==============================================================================
 if run and query:
-    st.header(f"📊 Analisi di Mercato: {query.upper()}")
+    st.header(f"🩺 Risultati dell'Operazione: {query.upper()}")
     
     st.markdown(f"""
     <div class="persona-card">
-        <b>Formato:</b> {p_type} | <b>Target:</b> {p_target} | <b>Pain Point:</b> {p_pain}
+        <b>PIANO DI CURA:</b> Utilizzare un <b>{p_type}</b> per eradicare <b>{p_pain}</b> nel target <b>{p_target}</b>.
     </div>
     """, unsafe_allow_html=True)
 
-    with st.spinner("Scansione in corso..."):
-        df = scrape_books_ws(mkt, query, pgs, is_color)
+    with st.spinner("Esecuzione scansione profonda..."):
+        df = scrape_books_surgical(mkt, query, pgs, False)
         
         if df is not None and not df.empty:
-            st.dataframe(df, column_config={"Copertina": st.column_config.ImageColumn("Cover")}, use_container_width=True, hide_index=True)
+            st.dataframe(df, column_config={"Copertina": st.column_config.ImageColumn("Preview")}, use_container_width=True, hide_index=True)
             
             avg_p = df['Prezzo'].mean()
-            avg_roy = df['Royalty_Val'].mean()
-            self_ratio = (len(df[df["Self-Pub"] == "Sì"]) / len(df)) * 100
-            
-            o_score = 40
-            if avg_p > 13: o_score += 20
-            if self_ratio > 45: o_score += 20
-            if avg_roy > 3.5: o_score += 20
+            avg_roy = df['Royalty_Est'].mean()
             
             st.markdown("---")
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("Prezzo Medio", f"{avg_p:.2f} €")
-            c2.metric("Royalty Media", f"{avg_roy:.2f} €")
-            c3.metric("Self-Pub Ratio", f"{int(self_ratio)}%")
-            c4.metric("Opportunity Score", f"{o_score}/100")
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Prezzo di Mercato", f"{avg_p:.2f} €")
+            c2.metric("Utile a Intervento (Royalty)", f"{avg_roy:.2f} €")
+            c3.metric("Opportunity Score", "75/100" if avg_p > 13 else "40/100")
 
-            if o_score >= 60:
-                st.markdown("---")
-                st.header("✍️ Proposta Editoriale Sbloccata")
-                titles, plot = KDPBrain.generate_editorial_proposal(p_type, p_target, p_pain, p_dream, query)
-                col_t, col_p = st.columns([1, 1.5])
-                with col_t:
-                    st.subheader("📌 Titoli Hook")
-                    for t in titles:
-                        st.markdown(f"<div class='editorial-card'><span class='title-option'>{t}</span></div>", unsafe_allow_html=True)
-                with col_p:
-                    st.subheader("📖 Bozza Trama")
-                    st.markdown(f"<div class='editorial-card'><p class='plot-text'>{plot}</p></div>", unsafe_allow_html=True)
+            # VERDETTO CHIRURGICO
+            st.markdown("---")
+            if avg_p > 13:
+                st.success("✅ **OPERAZIONE CONSIGLIATA:** La nicchia presenta margini sani. Il 'paziente' è disposto a pagare per la soluzione.")
+                st.header("✍️ Prescrizione Editoriale")
+                st.markdown(f"""
+                <div class="editorial-card">
+                    <span style="color:#cf222e; font-weight:bold; font-size:1.2rem;">TITOLO SUGGERITO:</span><br>
+                    <b>Protocollo {p_pain.title()}:</b> Il Metodo {p_type} per {p_target} che vogliono {p_dream}.<br><br>
+                    <span style="color:#24292f; font-style:italic;">Bozza Trama:</span><br>
+                    "Se sei un {p_target} e la tua vita è limitata da {p_pain}, questo {p_type} è il farmaco letterario di cui hai bisogno..."
+                </div>
+                """, unsafe_allow_html=True)
             else:
-                st.warning("⚠️ Score basso. Prova una delle alternative qui sotto:")
-                rescue_kws = [f"{p_type} per principianti {p_target}", f"{p_type} pratico {p_pain}", f"Guida a {p_pain} {p_type}"]
-                rcols = st.columns(3)
-                for i, rk in enumerate(rescue_kws):
-                    if rcols[i].button(f"🔍 Prova: {rk}", key=f"res_{i}", use_container_width=True):
-                        st.session_state['kw_active'] = rk; st.rerun()
-
-            st.markdown("---")
-            st.subheader("💡 Keyword Strategiche Alternative (Viola)")
-            ca1, ca2 = st.columns(2)
-            ca1.markdown(f"<div class='keyword-alt-card'><b>Focus Problema:</b><br>{p_type.title()} su {p_pain.lower()}</div>", unsafe_allow_html=True)
-            ca2.markdown(f"<div class='keyword-alt-card'><b>Focus Risultato:</b><br>{p_type.title()} per {p_dream.lower()}</div>", unsafe_allow_html=True)
+                st.error("⚠️ **OPERAZIONE RISCHIOSA:** Margini troppo bassi. Il rischio di 'emorragia finanziaria' con le Ads è elevato.")
         else:
             st.error("Errore Amazon. Riprova tra 60 secondi.")
