@@ -8,9 +8,9 @@ import openai
 from concurrent.futures import ThreadPoolExecutor
 
 # ==============================================================================
-# 1. DESIGN SYSTEM: CONTRASTO BIANCO/NERO (BLINDATO)
+# 1. DESIGN SYSTEM: CONTRASTO BIANCO/NERO (LOGICA BLINDATA)
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 9.5", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 9.6", page_icon="🛡️", layout="wide")
 
 st.markdown("""
     <style>
@@ -21,15 +21,13 @@ st.markdown("""
             background-color: #0d1117 !important; border-right: 1px solid #30363d; min-width: 480px !important;
         }
         
-        /* TESTO BIANCO PER SIDEBAR E TITOLI */
+        /* TESTO BIANCO PER SIDEBAR E TITOLI PRINCIPALI */
         section[data-testid="stSidebar"] * { color: #ffffff !important; }
         
         .white-title {
             color: #ffffff !important;
-            font-size: 2.2rem !important;
-            font-weight: 800 !important;
-            margin: 25px 0px !important;
-            display: block;
+            font-size: 2.2rem !important; font-weight: 800 !important;
+            margin: 25px 0px !important; display: block;
         }
 
         /* METRICHE: SFONDO BIANCO E TESTO NERO */
@@ -49,10 +47,8 @@ st.markdown("""
         .ebook-title { color: #856404 !important; font-size: 1.4rem !important; font-weight: 900 !important; display: block; }
         .ebook-plot { color: #000000 !important; line-height: 1.6 !important; font-size: 1.1rem !important; font-weight: 500; }
         
-        /* FORZA NERO SU TUTTO IL CORPO CENTRALE */
+        /* FORZA NERO SUI RISULTATI */
         .stMarkdown p, .stMarkdown li, .stMarkdown span, .stMarkdown div { color: #000000 !important; }
-        
-        /* OVERRIDE FINALE PER TITOLI BIANCHI */
         .white-title, section[data-testid="stSidebar"] h1 { color: white !important; }
     </style>
 """, unsafe_allow_html=True)
@@ -84,12 +80,10 @@ def fetch_page(url):
         return resp.text if resp.status_code == 200 else None
     except: return None
 
-def run_deep_market_scan(mkt, keyword):
+def run_surgical_scan(mkt, keyword):
     domains = {"Italia": "amazon.it", "USA": "amazon.com", "Spagna": "amazon.es", "Francia": "amazon.fr", "Germania": "amazon.de"}
     domain = domains.get(mkt, "amazon.it")
-    # Scansione di 15 pagine per trovare almeno 60 libri unici
-    urls = [f"https://www.{domain}/s?k={keyword.replace(' ', '+')}&i=stripbooks&page={i}" for i in range(1, 16)]
-    
+    urls = [f"https://www.{domain}/s?k={keyword.replace(' ', '+')}&i=stripbooks&page={i}" for i in range(1, 15)]
     results = []
     seen_titles = set()
     
@@ -108,9 +102,9 @@ def run_deep_market_scan(mkt, keyword):
             raw_text = item.get_text(separator=' ').lower()
             if not any(x in raw_text for x in ['pagine', 'kindle', 'copertina', 'formato']): continue
 
-            # BSR Detection (Regex Multilingua)
+            # BSR Detection
             bsr = 0
-            for p in [r'n\.\s*([0-9.,]+)\s*in', r'rank\s*#?\s*([0-9.,]+)', r'#([0-9.,]+)\s*in', r'posiziona\s*([0-9.,]+)']:
+            for p in [r'n\.\s*([0-9.,]+)\s*in', r'rank\s*#?\s*([0-9.,]+)', r'#([0-9.,]+)\s*in']:
                 m = re.search(p, raw_text)
                 if m: 
                     bsr = int(m.group(1).replace('.', '').replace(',', ''))
@@ -126,86 +120,82 @@ def run_deep_market_scan(mkt, keyword):
                 seen_titles.add(title)
                 results.append({
                     "Preview": item.find('img', class_='s-image')['src'] if item.find('img', class_='s-image') else "",
-                    "Titolo": title, 
-                    "Prezzo": price, 
-                    "BSR": bsr if bsr > 0 else "N/D", 
-                    "Autore/Tipo": "Sì (Self-Pub)" if any(x in raw_text for x in ['independently', 'kdp', 'createspace', 'indipendente']) else "Tradizionale"
+                    "Titolo": title, "Prezzo": price, "BSR": bsr if bsr > 0 else "N/D", 
+                    "Autore/Tipo": "Sì (Self-Pub)" if any(x in raw_text for x in ['independently', 'kdp', 'createspace']) else "Tradizionale"
                 })
     return pd.DataFrame(results)
 
 # ==============================================================================
-# 4. SIDEBAR FISSA
+# 4. SIDEBAR: PRECISION COMMANDS
 # ==============================================================================
 with st.sidebar:
-    st.markdown("# 🛡️ STRATEGY LAB 9.5")
+    st.markdown("# 🛡️ PRECISION LAB 9.6")
     if st.button("🔄 RESET"):
-        for k in ['results_df', 'ebook_ideas', 'score', 'final_keyword', 'kw_suggested']: 
-            st.session_state[k] = None
+        for k in ['results_df', 'ebook_ideas', 'score', 'final_keyword', 'kw_suggested']: st.session_state[k] = None
         st.rerun()
 
     st.markdown("---")
-    p_type = st.selectbox("Genere", [
-        "Saggio Scientifico", "Quiz Scientifico", "Manuale Tecnico", 
-        "Religioso / Teologico", "Spirituale / Esoterico", "Meditazione / Mindfulness", 
-        "Business e Marketing", "Romanzo Rosa", "Thriller / Noir", 
-        "Fantasy", "Fantascienza", "Manuale Psicologico", "Biografia", "Ricettario"
-    ])
-    p_desc = st.text_area("Cosa vuoi scrivere?")
-    p_target = st.text_input("A chi ti rivolgi?")
+    p_type = st.selectbox("Genere", ["Saggio Scientifico", "Manuale Tecnico", "Business", "Romanzo Rosa", "Ricettario", "Meditazione"])
+    p_niche = st.text_input("Nicchia Specifica", placeholder="es. Yoga per over 60 con problemi di schiena")
+    p_target = st.text_input("Identikit del Lettore", placeholder="es. Pensionati dinamici")
+    p_angle = st.text_input("Angolo di Attacco", placeholder="es. Approccio scientifico senza spiritualità")
     
-    if st.button("🧠 GENERA KEYWORD AI", type="primary"):
-        p = f"Genera UNA keyword per {p_type}. Info: {p_desc}. Target: {p_target}. Rispondi: KEYWORD: [testo]"
+    if st.button("🧠 GENERA KEYWORD CHIRURGICA", type="primary"):
+        # Prompt Ultra-Surgico per OpenAI
+        p = f"""
+        Sei un esperto SEO per Amazon KDP. Genera UNA keyword LONG-TAIL (3-5 parole) specifica per un {p_type}.
+        NICCHIA: {p_niche}
+        TARGET: {p_target}
+        ANGOLO: {p_angle}
+        Evita parole generiche. Deve avere alto intento d'acquisto.
+        Rispondi solo: KEYWORD: [testo]
+        """
         res = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": p}]).choices[0].message.content
         st.session_state.kw_suggested = res.split("KEYWORD:")[1].strip()
 
     if 'kw_suggested' in st.session_state:
         kw_input = st.text_input("Keyword finale:", value=st.session_state.kw_suggested)
-        mkt = st.selectbox("Mercato", ["Italia", "USA", "Spagna", "Francia", "Germania"])
+        mkt = st.selectbox("Marketplace", ["Italia", "USA", "Spagna", "Francia", "Germania"])
         
-        if st.button("🚀 LANCIA DEEP SCAN (60+ LIBRI)", use_container_width=True):
-            with st.spinner("⚡ Analisi massiva in corso..."):
-                df = run_deep_market_scan(mkt, kw_input)
-                if not df.empty:
-                    st.session_state.results_df = df
-                    st.session_state.final_keyword = kw_input
-                    avg_p = df['Prezzo'].mean()
-                    indie_n = len(df[df['Autore/Tipo'].str.contains("Sì")])
-                    st.session_state.score = 40 + (30 if avg_p > 13.5 else 0) + (30 if (indie_n/len(df)) > 0.4 else 0)
-                    
-                    if st.session_state.score >= 60:
-                        p_eb = f"Analisi OK per '{kw_input}'. Suggerisci 3 titoli e 3 trame. FORMATO: [PROPOSTA_START] TITOLO: [testo] | TRAMA: [testo] [PROPOSTA_END]"
-                        st.session_state.ebook_ideas = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": p_eb}]).choices[0].message.content
-                    else: st.session_state.ebook_ideas = "NEGATIVE"
-                else:
-                    st.error("Nessun libro trovato per questa keyword.")
+        if st.button("🚀 LANCIA DEEP SCAN (60 LIBRI)", use_container_width=True):
+            df = run_surgical_scan(mkt, kw_input)
+            if not df.empty:
+                st.session_state.results_df = df
+                st.session_state.final_keyword = kw_input
+                avg_p = df['Prezzo'].mean()
+                self_r = (len(df[df['Autore/Tipo'].str.contains("Sì")]) / len(df)) * 100
+                st.session_state.score = 40 + (30 if avg_p > 13.5 else 0) + (30 if self_r > 40 else 0)
+                
+                if st.session_state.score >= 60:
+                    p_eb = f"Analisi OK per '{kw_input}'. Suggerisci 3 titoli e 3 trame specifiche. FORMATO: [PROPOSTA_START] TITOLO: [testo] | TRAMA: [testo] [PROPOSTA_END]"
+                    st.session_state.ebook_ideas = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": p_eb}]).choices[0].message.content
+                else: st.session_state.ebook_ideas = "NEGATIVE"
 
 # ==============================================================================
 # 5. DASHBOARD: VISUALIZZAZIONE PERSISTENTE
 # ==============================================================================
 if st.session_state.results_df is not None:
-    st.markdown(f"<div class='white-title'>📊 Analisi Mercato: {st.session_state.final_keyword.upper()}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='white-title'>📊 Analisi Chirurgica: {st.session_state.final_keyword.upper()}</div>", unsafe_allow_html=True)
     
     st.markdown("""
     <div class="explanation-box">
-        <b>📘 Manuale Analisi (Testo Nero):</b><br>
-        • <b>BSR (Best Sellers Rank):</b> La classifica di Amazon. Più è basso, più il libro "scotta" (vende molto).<br>
-        • <b>Indie Ratio:</b> Percentuale di Self-Publisher. Se è alta, la nicchia è scalabile.<br>
-        • <b>Opp. Score:</b> Se è > 60, hai luce verde per la produzione.
+        <b>📘 Nota sulla Precisione (Testo Nero):</b><br>
+        Le keyword generate ora puntano a nicchie "micro-targetizzate". <br>
+        • <b>BSR:</b> Se vedi libri con BSR sotto 50k, la nicchia "pulsa" ed è attiva.<br>
+        • <b>Indie Ratio:</b> Indica se c'è spazio per un autore senza un grande editore.
     </div>
     """, unsafe_allow_html=True)
     
-    # Tabella completa
     st.dataframe(st.session_state.results_df, use_container_width=True, hide_index=True)
     
-    # Metriche Nere su Bianco
     c1, c2, c3 = st.columns(3)
     c1.metric("Prezzo Medio", f"{st.session_state.results_df['Prezzo'].mean():.2f} €")
-    indie_count = len(st.session_state.results_df[st.session_state.results_df['Autore/Tipo'].str.contains('Sì')])
-    c2.metric("Indie Ratio", f"{int((indie_count / len(st.session_state.results_df)) * 100)}%")
-    c3.metric("Score Nicchia", f"{st.session_state.score}/100")
+    indie_n = len(st.session_state.results_df[st.session_state.results_df['Autore/Tipo'].str.contains('Sì')])
+    c2.metric("Indie Ratio", f"{int((indie_n / len(st.session_state.results_df)) * 100)}%")
+    c3.metric("Score", f"{st.session_state.score}/100")
 
     if st.session_state.score >= 60:
-        st.success("✅ ANALISI POSITIVA: Ecco la strategia suggerita")
+        st.success("✅ ANALISI POSITIVA: Ecco la tua opportunità editoriale")
         proposte = st.session_state.ebook_ideas.split("[PROPOSTA_START]")
         for prop in proposte[1:]:
             if "[PROPOSTA_END]" in prop and "| TRAMA:" in prop:
@@ -215,4 +205,4 @@ if st.session_state.results_df is not None:
                 p = parts[1].strip()
                 st.markdown(f'<div class="ebook-suggestion-card"><span class="ebook-title">📘 {t}</span><p class="ebook-plot">{p}</p></div>', unsafe_allow_html=True)
     else:
-        st.error("❌ ANALISI NEGATIVA: Margini bassi o troppa competizione.")
+        st.error("❌ ANALISI NEGATIVA: La keyword è troppo competitiva o poco redditizia.")
