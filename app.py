@@ -10,7 +10,7 @@ import openai
 # 1. DESIGN SYSTEM ELITE (DARK MODE & CATEGORICAL UI)
 # ==============================================================================
 st.set_page_config(
-    page_title="KDP OMNI-REASONER 3.2",
+    page_title="KDP OMNI-REASONER 3.3",
     page_icon="📚",
     layout="wide",
     initial_sidebar_state="expanded" 
@@ -46,7 +46,7 @@ st.markdown("""
         .marketing-angle { color: #0969da; font-weight: 700; font-size: 0.95rem; margin-bottom: 15px; display: block; background: #f0f9ff; padding: 5px 10px; border-radius: 5px; }
         .plot-detailed { color: #24292f; line-height: 1.7; font-size: 1.05rem; white-space: pre-wrap; }
 
-        /* PIVOT CARD DARK (REINDIRIZZAMENTO) */
+        /* PIVOT CARD DARK */
         .pivot-card {
             background-color: #1c2128; border: 1px solid #444c56; padding: 20px;
             border-radius: 12px; margin-bottom: 20px; border-left: 6px solid #673ab7;
@@ -79,7 +79,7 @@ class SurgicalAI:
         - FORMATO: {p_type} | TARGET: {p_target} | DOLORE: {p_pain} | SOGNO: {p_dream}
         COMPITO:
         1. Crea una keyword Long Tail chirurgica ad alta conversione ESCLUSIVAMENTE per Amazon Libri.
-        2. Spiega la leva psicologica d'acquisto in 2 righe.
+        2. Spiega la leva psicologica d'acquisto in 2 righe adattandola al genere '{p_type}'.
         RISPOSTA: KEYWORD: [testo] | LOGICA: [testo]
         """
         response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}])
@@ -101,19 +101,19 @@ class SurgicalAI:
     def genera_master_plan(p_type, p_target, p_pain, p_dream, kw):
         prompt = f"""
         Agisci come Editor-in-Chief. Crea 5 proposte editoriali (Libri o Ebook) sulla keyword '{kw}'.
-        Target: {p_target}. Dolore: {p_pain}. Sogno: {p_dream}.
+        Genere/Formato: {p_type}. Target: {p_target}. Focus: {p_pain} / {p_dream}.
         
         Per ogni opzione fornisci:
-        1. TITOLO: Accattivante con trigger emotivo.
-        2. ANGOLO DI MARKETING: La promessa unica del libro.
-        3. TRAMA DETTAGLIATA: Almeno 180 parole che descrivano la struttura del libro e i benefici per il lettore.
+        1. TITOLO: Accattivante e specifico per il genere {p_type}.
+        2. ANGOLO DI MARKETING: Perché il lettore di {p_type} dovrebbe sceglierlo.
+        3. TRAMA DETTAGLIATA: Almeno 180 parole. Se è narrativa, descrivi il conflitto e l'atmosfera. Se è saggistica/tecnico, descrivi i benefici e la struttura.
         """
         response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}])
         return response.choices[0].message.content
 
     @staticmethod
     def genera_pivot(p_target, p_pain, p_dream, kw_fallita):
-        prompt = f"La keyword editoriale '{kw_fallita}' per '{p_target}' è satura. Suggerisci 3 Keyword Pivot basate su dolore '{p_pain}' e sogno '{p_dream}' specifiche per Libri/Ebook."
+        prompt = f"La keyword editoriale '{kw_fallita}' per '{p_target}' è troppo competitiva. Suggerisci 3 Keyword Pivot specifiche per Libri/Ebook basate su '{p_pain}' e '{p_dream}'."
         response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}])
         return response.choices[0].message.content
 
@@ -134,8 +134,8 @@ def run_strategic_scan(mkt, keyword, pages):
         results = []
         for item in items:
             item_text = item.get_text().lower()
-            # Filtro per garantire che sia un libro e non merchandising
-            book_triggers = ['copertina', 'pagine', 'kindle', 'formato', 'paperback', 'hardcover', 'editor', 'editore', 'ebook', 'volumi', 'edizione']
+            # Filtro rigido per garantire solo Libri/Ebook
+            book_triggers = ['copertina', 'pagine', 'kindle', 'formato', 'paperback', 'hardcover', 'editor', 'editore', 'ebook', 'volumi', 'edizione', 'illustrato', 'testi di']
             if not any(x in item_text for x in book_triggers):
                 continue
 
@@ -164,37 +164,39 @@ if 'kw_active' not in st.session_state: st.session_state['kw_active'] = ""
 if 'ai_logic' not in st.session_state: st.session_state['ai_logic'] = ""
 
 with st.sidebar:
-    st.title("🛡️ KDP OMNI-REASONER 3.2")
-    st.caption("Filtro Categorico Rigido: Solo Libri ed Ebook ✅")
+    st.title("🛡️ OMNI-STRATEGY AI")
+    st.caption("Filtro Categorico: Libri ed Ebook ✅")
     
     if st.button("🔄 NUOVA SESSIONE", use_container_width=True):
         st.session_state['kw_active'] = ""; st.session_state['ai_logic'] = ""; st.rerun()
 
     st.markdown("---")
-    st.subheader("👤 Analisi Predittiva Target")
+    st.subheader("📋 Diagnosi Buyer Persona")
     
-    # LISTA FORMATI ESTESA
-    p_type = st.selectbox("Formato Editoriale", [
-        "Manuale Pratico", 
-        "Workbook / Eserciziario", 
-        "Diario di Trasformazione", 
-        "Guida Passo-Passo",
-        "Ricettario Strategico",
-        "Activity Book (Libro di Attività)",
-        "Libro di Quiz e Test",
-        "Planner / Agenda Specializzata",
-        "Prontuario / Compendio",
-        "Saggio Divulgativo",
-        "Libro da Colorare (Coloring Book)",
-        "Flashcards Book"
+    # NUOVA LISTA FORMATI RICHIESTA
+    p_type = st.selectbox("Genere / Formato", [
+        "Saggio Scientifico", 
+        "Quiz Scientifico", 
+        "Manuale Tecnico", 
+        "Religioso / Teologico", 
+        "Spirituale / Esoterico", 
+        "Meditazione / Mindfulness", 
+        "Business e Marketing", 
+        "Romanzo Rosa", 
+        "Thriller / Noir", 
+        "Fantasy", 
+        "Fantascienza", 
+        "Manuale Psicologico", 
+        "Biografia", 
+        "Ricettario"
     ])
     
-    p_target = st.text_input("Target (A chi si rivolge?)", placeholder="es. Insegnanti stressati")
-    p_pain = st.text_input("Problema (Cosa lo affligge?)", placeholder="es. gestione della classe")
-    p_dream = st.text_input("Sogno (Cosa desidera?)", placeholder="es. autorità e calma")
+    p_target = st.text_input("Target (A chi si rivolge?)", placeholder="es. Appassionati di astrofisica")
+    p_pain = st.text_input("Conflitto / Problema", placeholder="es. complessità della materia")
+    p_dream = st.text_input("Desiderio / Emozione", placeholder="es. comprensione profonda dell'universo")
     
     if st.button("🧠 GENERA STRATEGIA AI", use_container_width=True, type="primary") and API_READY:
-        with st.spinner("L'AI sta dissezionando il bisogno..."):
+        with st.spinner("L'AI sta dissezionando la nicchia..."):
             res = SurgicalAI.brainstorm_keyword(p_type, p_target, p_pain, p_dream)
             if "KEYWORD:" in res:
                 st.session_state['kw_active'] = res.split("KEYWORD:")[1].split("|")[0].strip()
@@ -216,11 +218,10 @@ with st.sidebar:
 if run_btn and query and API_READY:
     st.header(f"📚 Report Strategico: {query.upper()}")
     
-    with st.spinner("Scansione categorica di 20 competitor editoriali..."):
+    with st.spinner("Analisi categorica di 20 competitor editoriali..."):
         df = run_strategic_scan(mkt, query, pgs)
         
         if df is not None and not df.empty:
-            # Audit Qualitativo GPT
             audit_res = SurgicalAI.executive_audit(df, query, p_target)
             st.markdown(f'<div class="ai-audit-card"><b>🤖 AI EXECUTIVE AUDIT (Analisi Qualitativa):</b><br>{audit_res}</div>', unsafe_allow_html=True)
 
@@ -240,9 +241,10 @@ if run_btn and query and API_READY:
 
             if o_score >= 60:
                 st.markdown("---")
-                st.header("✍️ Master Plan di Pubblicazione (5 Opzioni)")
-                with st.spinner("L'AI sta redigendo i contenuti SEO..."):
+                st.header("✍️ Piano Editoriale di Pubblicazione (5 Opzioni)")
+                with st.spinner("L'AI sta redigendo i contenuti SEO e creativi..."):
                     master_plan = SurgicalAI.genera_master_plan(p_type, p_target, p_pain, p_dream, query)
+                    # Formattazione per rendere i titoli rossi e le trame leggibili
                     formatted_plan = (master_plan
                         .replace("TITOLO:", " <span class='title-option'>")
                         .replace("ANGOLO DI MARKETING:", "</span> <span class='marketing-angle'>")
@@ -255,7 +257,7 @@ if run_btn and query and API_READY:
             else:
                 st.markdown("---")
                 st.header("🔄 Reindirizzamento Strategico (AI Pivot)")
-                st.warning("⚠️ Score insufficiente. Lo Stratega AI ha elaborato queste vie d'uscita per il settore Libri:")
+                st.warning("⚠️ Score insufficiente. Lo Stratega AI ha elaborato queste alternative:")
                 pivot_res = SurgicalAI.genera_pivot(p_target, p_pain, p_dream, query)
                 st.markdown(f'<div class="pivot-card"><b>Analisi di Reindirizzamento:</b><br>{pivot_res.replace("1.", "<br><b>1.</b>").replace("2.", "<br><b>2.</b>").replace("3.", "<br><b>3.</b>")}</div>', unsafe_allow_html=True)
         else:
