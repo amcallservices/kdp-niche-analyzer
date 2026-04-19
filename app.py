@@ -61,6 +61,11 @@ st.markdown("""
             padding: 20px; border-radius: 10px; color: #0369a1;
             margin-bottom: 20px; border-left: 5px solid #0369a1;
         }
+        
+        .instruction-box {
+            background-color: #161b22; border: 1px solid #30363d;
+            padding: 15px; border-radius: 8px; color: #8b949e; font-size: 0.85rem; margin-top: 10px;
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -76,10 +81,18 @@ class KDPFreeTools:
         suffix = mkt_map.get(mkt_code, "it")
         url = f"https://completion.amazon.com/api/2017/suggestions?limit=10&prefix={urllib.parse.quote(keyword)}&alias=stripbooks&mid=ATVPDKIKX0DER"
         if suffix == "it": url = url.replace("com", "it").replace("ATVPDKIKX0DER", "APJ6JRA9NG5V4")
+        
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        }
+        
         try:
-            r = requests.get(url, timeout=10)
-            return [s['value'] for s in r.json()['suggestions']] if r.status_code == 200 else []
-        except: return []
+            r = requests.get(url, headers=headers, timeout=5)
+            if r.status_code == 200:
+                return [s['value'] for s in r.json()['suggestions']]
+        except: 
+            return []
+        return []
 
 class KDPBrain:
     @staticmethod
@@ -107,7 +120,7 @@ class KDPBrain:
         return titles, plot
 
 # ==============================================================================
-# 3. CORE SCRAPER (CATEGORICO LIBRI CON DEBUG)
+# 3. CORE SCRAPER
 # ==============================================================================
 def scrape_books(mkt, keyword, pages, is_color):
     domains = {"Italia": "amazon.it", "USA": "amazon.com", "Spagna": "amazon.es", "Francia": "amazon.fr", "Germania": "amazon.de"}
@@ -116,41 +129,27 @@ def scrape_books(mkt, keyword, pages, is_color):
     url = f"https://www.{domain}/s?k={keyword.replace(' ', '+')}&i=stripbooks"
     
     try:
-        # Analisi iniziale della pagina di ricerca (senza render per velocità)
         res = requests.get('http://api.scraperapi.com', params={'api_key': API_KEY, 'url': url, 'country_code': country}, timeout=60)
-        
-        if res.status_code == 403:
-            st.error("🚫 ScraperAPI: Crediti esauriti o API Key non valida.")
-            return None
-        if res.status_code != 200:
-            st.error(f"⚠️ Errore Server Amazon (Status {res.status_code}). Riprova.")
-            return None
+        if res.status_code != 200: return None
 
         soup = BeautifulSoup(res.text, 'html.parser')
         items = soup.find_all('div', {'data-component-type': 's-search-result'})[:15]
-        
-        if not items:
-            st.warning("🧐 Nessun libro trovato per questa keyword. Prova a variare la ricerca.")
-            return None
+        if not items: return None
 
         results = []
         p_bar = st.progress(0)
-        
         for i, item in enumerate(items):
             title = item.h2.text.strip() if item.h2 else "N/A"
             img = item.find('img', class_='s-image')['src'] if item.find('img', class_='s-image') else ""
-            
             p_w = item.find('span', 'a-price-whole')
             p_f = item.find('span', 'a-price-fraction')
             price = float(f"{p_w.text.replace(',','').replace('.','')}.{p_f.text}") if p_w and p_f else 0.0
             
-            # Scansione profonda per BSR (qui usiamo render se necessario)
             bsr = 0
             is_self = False
             link_tag = item.find('a', class_='a-link-normal s-no-outline')
             if link_tag:
                 p_url = f"https://www.{domain}" + link_tag['href']
-                # Deep scan veloce
                 res_p = requests.get('http://api.scraperapi.com', params={'api_key': API_KEY, 'url': p_url, 'country_code': country}, timeout=30)
                 if res_p.status_code == 200:
                     ps = BeautifulSoup(res_p.text, 'html.parser').get_text().lower()
@@ -166,20 +165,28 @@ def scrape_books(mkt, keyword, pages, is_color):
                 "Vendite": sales, "Profitto": round(sales * roy, 2), "Self-Pub": "Sì" if is_self else "No"
             })
             p_bar.progress((i + 1) / len(items))
-        
         return pd.DataFrame(results)
-    except Exception as e:
-        st.error(f"❌ Errore Tecnico: {str(e)}")
-        return None
+    except: return None
 
 # ==============================================================================
-# 4. SIDEBAR: PERSONA LAB & FIX GENERATORE
+# 4. SIDEBAR: ISTRUZIONI & PERSONA LAB
 # ==============================================================================
 if 'kw_active' not in st.session_state:
     st.session_state['kw_active'] = ""
 
 with st.sidebar:
     st.title("🛡️ STRATEGY COMMAND")
+    
+    # --- ISTRUZIONI DETTAGLIATE ---
+    with st.expander("📖 Istruzioni d'Uso", expanded=False):
+        st.markdown("""
+        1. **Definisci la Persona:** Inserisci chi è il lettore, il suo problema principale e il sogno che vuole realizzare.
+        2. **Genera la Keyword:** Clicca sul tasto '🎯 Genera' per creare una keyword basata sulla psicologia del marketing.
+        3. **Ottimizza:** Usa i 'Suggerimenti Autocomplete' per trovare nicchie con meno concorrenza.
+        4. **Parametri Libro:** Imposta pagine e tipo di stampa per avere un calcolo royalty preciso.
+        5. **Analizza:** Lancia l'analisi. Se l'Opportunity Score è > 60, il sistema sbloccherà titoli e trama pronti all'uso.
+        """)
+
     if st.button("🔄 NUOVA ANALISI", use_container_width=True):
         st.session_state['kw_active'] = ""
         st.rerun()
@@ -201,13 +208,17 @@ with st.sidebar:
     mkt = st.selectbox("Marketplace", ["Italia", "USA", "Spagna", "Francia", "Germania"])
     query = st.text_input("🔍 Keyword Focus", value=st.session_state['kw_active'])
     
+    # SUGGERIMENTI AUTOCOMPLETE (FIXED)
     if query:
-        with st.expander("💡 Suggerimenti Autocomplete"):
+        with st.expander("💡 Suggerimenti Autocomplete", expanded=True):
             suggs = KDPFreeTools.get_amazon_suggestions(query, mkt)
-            for s in suggs:
-                if st.button(f"🔎 {s}", key=f"sug_{s}", use_container_width=True):
-                    st.session_state['kw_active'] = s
-                    st.rerun()
+            if suggs:
+                for s in suggs:
+                    if st.button(f"🔎 {s}", key=f"s_{s}", use_container_width=True):
+                        st.session_state['kw_active'] = s
+                        st.rerun()
+            else:
+                st.caption("Nessun suggerimento trovato. Prova a digitare più caratteri.")
 
     st.markdown("---")
     pgs = st.number_input("Pagine", min_value=24, value=120)
@@ -218,6 +229,7 @@ with st.sidebar:
 # 5. MAIN DASHBOARD
 # ==============================================================================
 if run and query:
+    
     st.header(f"📊 Business Analysis: {query.upper()}")
     
     st.markdown(f"""
@@ -244,12 +256,12 @@ if run and query:
             st.markdown("---")
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Prezzo Medio", f"{avg_p:.2f} €")
-            c2.metric("Royalty Media", f"{avg_roy:.2f} €")
+            c2.metric("Royalty Media", f"{avg_roy!r:.2f} €")
             c3.metric("Self-Pub Ratio", f"{int(self_ratio)}%")
             c4.metric("Opportunity Score", f"{o_score}/100")
 
             st.markdown("---")
-            st.subheader("💡 Keyword Strategiche Alternative (Colorate)")
+            st.subheader("💡 Keyword Strategiche Alternative")
             ca1, ca2, ca3 = st.columns(3)
             ca1.markdown(f"<div class='keyword-alt-card'><b>Focus Nicchia:</b><br>{p_target.title()} e {p_pain.lower()}</div>", unsafe_allow_html=True)
             ca2.markdown(f"<div class='keyword-alt-card'><b>Focus Risultato:</b><br>Come ottenere {p_dream.lower()}</div>", unsafe_allow_html=True)
@@ -269,3 +281,5 @@ if run and query:
                     st.markdown(f"<div class='editorial-card'><p class='plot-text'>{plot}</p></div>", unsafe_allow_html=True)
             else:
                 st.warning("⚠️ Opportunity Score insufficiente per suggerire titoli e trama.")
+        else:
+            st.error("Errore Amazon o Nessun Risultato. Riprova tra 60 secondi.")
