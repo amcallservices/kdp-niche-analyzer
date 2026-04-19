@@ -5,28 +5,34 @@ from bs4 import BeautifulSoup
 import time
 import re
 
-# 1. Configurazione Pagina
+# 1. Configurazione Pagina - Forza lo stato espanso all'avvio
 st.set_page_config(
     page_title="KDP Niche Analyzer Ultimate 2026", 
     page_icon="💎", 
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded" # Forza la sidebar aperta all'avvio
 )
 
-# 2. CSS per UI Professionale e RIMOZIONE MENU IN ALTO A DESTRA + SIDEBAR FISSA
+# 2. CSS per UI Professionale, RIMOZIONE MENU E SIDEBAR FISSA
 st.markdown("""
     <style>
-        /* Nasconde il menu in alto a destra (hamburger menu) e il footer */
+        /* Nasconde il menu in alto a destra e il footer */
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
         header {visibility: hidden;}
         
-        /* BLOCCA LA SIDEBAR: Nasconde il pulsante per chiuderla/comprimerla */
+        /* BLOCCA LA SIDEBAR: Nasconde il pulsante "X" o la freccia per chiuderla */
         [data-testid="collapsedControl"] {
             display: none !important;
         }
 
-        /* Opzionale: Rimuove il margine superiore per un look più pulito */
+        /* Rende la sidebar non richiudibile e fissa */
+        section[data-testid="stSidebar"] {
+            min-width: 350px !important;
+            max-width: 350px !important;
+        }
+
+        /* Opzionale: Rimuove il margine superiore */
         .block-container {
             padding-top: 1rem;
         }
@@ -59,7 +65,7 @@ st.markdown("""
 # LA TUA CHIAVE API
 API_KEY = "ce57dc2330590954355f5c12171c7ce9"
 
-# Inizializzazione Session State per il trasferimento automatico della keyword
+# Inizializzazione Session State
 if 'target_keyword' not in st.session_state:
     st.session_state['target_keyword'] = ""
 
@@ -91,8 +97,7 @@ def get_amazon_data(marketplace, keyword, pagine, colore):
     domain = domains.get(marketplace, "amazon.it")
     country = 'it' if marketplace == "Italia" else 'us'
     
-    # CARATTERISTICA RICHIESTA: Forza la ricerca esclusivamente nella categoria Libri (i=stripbooks)
-    # Questo parametro impedisce ad Amazon di mostrare altri prodotti non editoriali.
+    # Forza la ricerca esclusivamente nella categoria Libri
     target_url = f"https://www.{domain}/s?k={keyword.replace(' ', '+')}&i=stripbooks"
     
     try:
@@ -109,16 +114,13 @@ def get_amazon_data(marketplace, keyword, pagine, colore):
             img_tag = item.find('img', class_='s-image')
             cover_url = img_tag['src'] if img_tag else ""
             
-            # Prezzo
             p_whole = item.find('span', 'a-price-whole')
             p_frac = item.find('span', 'a-price-fraction')
             price = float(f"{p_whole.text.replace(',','').replace('.','')}.{p_frac.text}") if p_whole and p_frac else 0.0
             
-            # Recensioni
             rev_tag = item.find('span', {'class': 'a-size-base s-underline-text'})
             reviews = int(re.sub(r'\D', '', rev_tag.text)) if rev_tag else 0
             
-            # Deep Scan per BSR e Editore
             bsr = 0
             is_self = False
             link_tag = item.find('a', class_='a-link-normal s-no-outline')
@@ -144,7 +146,7 @@ def get_amazon_data(marketplace, keyword, pagine, colore):
         return pd.DataFrame(results)
     except: return None
 
-# --- UI SIDEBAR ---
+# --- UI SIDEBAR (ORA FISSA E SEMPRE APERTA) ---
 with st.sidebar:
     st.title("🛡️ KDP Strategy Lab")
     if st.button("🔄 Reset Totale"):
@@ -160,12 +162,10 @@ with st.sidebar:
         
         if arg and pub and ben:
             st.caption("Clicca per caricare la keyword:")
-            # Strategia 1: Focus Risultato
             k1 = f"{arg} per {pub}: {ben}"
             if st.button(f"🎯 {k1}"): 
                 st.session_state['target_keyword'] = k1
                 st.rerun()
-            # Strategia 2: Focus Pratico
             k2 = f"Esercizi di {arg} per {pub} per {ben}"
             if st.button(f"📦 {k2}"): 
                 st.session_state['target_keyword'] = k2
@@ -188,7 +188,6 @@ if run and key_input:
             st.success("Dati Ricevuti!")
             st.dataframe(df, column_config={"Copertina": st.column_config.ImageColumn("Cover")}, use_container_width=True, hide_index=True)
             
-            # Analisi Professionale
             avg_p = df["Prezzo"].mean()
             avg_r = df["Royalty"].mean()
             self_ratio = (len(df[df["Self-Pub"] == "Sì"]) / len(df)) * 100
@@ -200,7 +199,6 @@ if run and key_input:
             c2.metric("Royalty Media", f"{avg_r:.2f} €")
             c3.metric("Self-Pub Ratio", f"{int(self_ratio)}%")
             
-            # Calcolo Opportunity Score Avanzato
             score = 50
             if avg_p > 13: score += 20
             if self_ratio > 40: score += 20
@@ -210,15 +208,14 @@ if run and key_input:
             col_a, col_b = st.columns(2)
             with col_a:
                 st.subheader("📝 Analisi Fattibilità")
-                if score >= 70: st.success("✅ **NICCHIA VALIDATA**: Alta presenza di Self-Publisher e margini ottimi. Consigliato l'ingresso immediato.")
-                elif avg_p < 11: st.error("❌ **MARGINI INSUFFICIENTI**: I prezzi sono troppo bassi per sostenere Amazon Ads. Crea un Bundle per alzare il prezzo.")
-                else: st.warning("⚠️ **CONCORRENZA NOTEVOLE**: I dati sono misti. Richiede una copertina eccezionale per distinguersi.")
+                if score >= 70: st.success("✅ **NICCHIA VALIDATA**")
+                elif avg_p < 11: st.error("❌ **MARGINI INSUFFICIENTI**")
+                else: st.warning("⚠️ **CONCORRENZA NOTEVOLE**")
 
             with col_b:
                 st.subheader("💡 Espansione Nicchia")
                 kw = key_input.lower()
                 st.markdown(f"<div class='keyword-box'><b>Versione Workbook:</b> Libro di esercizi {kw}</div>", unsafe_allow_html=True)
                 st.markdown(f"<div class='keyword-box'><b>Versione Strategica:</b> {kw} per principianti</div>", unsafe_allow_html=True)
-                st.markdown(f"<div class='keyword-box'><b>Versione Premium:</b> Manuale definitivo di {kw}</div>", unsafe_allow_html=True)
         else:
-            st.error("Errore di connessione o superamento limiti. Riprova tra 60 secondi.")
+            st.error("Errore di connessione. Riprova tra 60 secondi.")
