@@ -93,7 +93,6 @@ def get_amazon_data(mkt, keyword):
             if not title or title in seen: continue
             
             text = item.get_text(separator=' ').lower()
-            # 3) ANALISI BSR
             bsr_match = re.search(r'n\.\s*([0-9.,]+)\s*in', text) or re.search(r'#([0-9.,]+)\s*in', text)
             bsr = bsr_match.group(1).replace('.', '').replace(',', '') if bsr_match else "N/D"
             
@@ -106,7 +105,6 @@ def get_amazon_data(mkt, keyword):
             
             if price > 0 or bsr != "N/D":
                 seen.add(title)
-                # 4) MOSTRA TITOLI ANALIZZATI (Sempre almeno 20)
                 results.append({"Titolo Analizzato": title, "Prezzo": price, "BSR": bsr, "Editore": is_self})
             
             if len(results) >= 50: break
@@ -125,12 +123,10 @@ with st.sidebar:
         st.rerun()
     
     st.markdown("---")
-    # AGGIUNTO Test Prep
     genere = st.selectbox("Seleziona Genere", ["Saggio Scientifico", "Quiz Scientifico", "Manuale Tecnico", "Test Prep", "Religioso", "Spirituale", "Meditazione", "Business", "Romanzo Rosa", "Thriller", "Fantasy", "Fantascienza", "Psicologia", "Biografia", "Ricettario"])
     nicchia = st.text_input("Sotto-nicchia specifica")
     target = st.text_input("Target Lettore")
     
-    # 2) GENERAZIONE KEYWORD SPECIFICHE
     if st.button("🔍 GENERA KEYWORD SPECIFICHE"):
         if not nicchia or not target:
             st.error("Inserisci nicchia e target!")
@@ -158,10 +154,10 @@ with st.sidebar:
                     score = 40 + (30 if avg_p > 12.5 else 0) + (30 if indie_r > 40 else 0)
                     st.session_state.score = score
                     
-                    # 1) GENERAZIONE TITOLI E TRAME ADATTE ALLA STESURA
                     if score >= 60:
                         client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                        prompt_book = f"Analisi POSITIVA per la keyword '{kw_selezionata}'. Genera 3 titoli magnetici e 3 trame strutturate adatte alla stesura di un libro di successo in questa nicchia ({genere}). Formato: TITOLO: [testo] | TRAMA: [testo]"
+                        # Prompt reso più rigido per evitare errori di stampa
+                        prompt_book = f"Analisi POSITIVA per la keyword '{kw_selezionata}'. Genera esattamente 3 blocchi composti così: TITOLO: [nome] | TRAMA: [descrizione]. Non aggiungere altro testo."
                         sugg = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt_book}]).choices[0].message.content
                         st.session_state.suggestions = sugg
                     else:
@@ -170,14 +166,11 @@ with st.sidebar:
                     st.error("⚠️ Nessun dato trovato. Prova una keyword meno specifica.")
 
 # ==============================================================================
-# 5. RISULTATI (STAMPA TITOLI E TRAME)
+# 5. RISULTATI (FIX: STAMPA ROBUSTA DI TITOLI E TRAME)
 # ==============================================================================
 if st.session_state.data is not None:
     st.markdown(f"<div class='white-title'>Analisi per: {st.session_state.kw.upper()}</div>", unsafe_allow_html=True)
     
-    st.markdown("""<div class="explanation-box"><b>💡 Guida ai Dati:</b><br>• <b>BSR:</b> Ranking di vendita attuale (minore è il numero, più vende).<br>• <b>Indie Ratio:</b> Possibilità di competizione per autori indipendenti.<br>• <b>Titoli:</b> Elenco dei libri analizzati (almeno 20).</div>""", unsafe_allow_html=True)
-    
-    # Visualizzazione Tabella Dati (Titoli e BSR)
     st.dataframe(st.session_state.data, use_container_width=True, hide_index=True)
     
     c1, c2, c3 = st.columns(3)
@@ -186,24 +179,24 @@ if st.session_state.data is not None:
     c2.metric("Indie Ratio", f"{int(indie_p)}%")
     c3.metric("Score Nicchia", f"{st.session_state.score}/100")
 
-    # STAMPA TITOLI E TRAME IN CASO DI ANALISI POSITIVA
     if st.session_state.suggestions == "NEGATIVE":
-        st.warning("⚠️ Score basso (<60). Nicchia satura o poco profittevole. Suggerimenti non generati.")
+        st.warning("⚠️ Score basso (<60). Suggerimenti non generati.")
     elif st.session_state.suggestions:
-        st.success("✅ ANALISI POSITIVA! Ecco i titoli e le trame per la stesura del tuo libro:")
+        st.success("✅ ANALISI POSITIVA! Ecco i titoli e le trame consigliate:")
         
-        # Split per riga e pulizia per catturare ogni blocco Titolo | Trama
-        for item in st.session_state.suggestions.split("\n"):
-            if "|" in item and "TITOLO" in item.upper():
-                parts = item.split("|")
-                # Estrazione sicura
-                title_text = parts[0].replace('TITOLO:', '').replace('Titolo:', '').strip()
-                plot_text = parts[1].replace('TRAMA:', '').replace('Trama:', '').strip()
+        # LOGICA DI STAMPA CORRETTA E ROBUSTA
+        # Splitto usando "TITOLO:" come separatore di blocco
+        blocks = st.session_state.suggestions.split("TITOLO:")
+        for block in blocks[1:]: # Salto il primo elemento che è vuoto
+            if "|" in block:
+                parts = block.split("|")
+                # Pulizia sicura dei tag
+                title_final = parts[0].strip()
+                plot_final = parts[1].replace('TRAMA:', '').replace('Trama:', '').strip()
                 
-                # Rendering della Card
                 st.markdown(f"""
                 <div class="ebook-card">
-                    <div class="ebook-title">📘 {title_text}</div>
-                    <div class="ebook-plot"><b>Sinossi per la stesura:</b> {plot_text}</div>
+                    <div class="ebook-title">📘 {title_final}</div>
+                    <div class="ebook-plot"><b>Sinossi:</b> {plot_final}</div>
                 </div>
                 """, unsafe_allow_html=True)
