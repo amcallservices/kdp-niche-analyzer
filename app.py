@@ -5,10 +5,9 @@ from bs4 import BeautifulSoup
 import time
 import re
 
-# Configurazione Pagina
 st.set_page_config(page_title="KDP Analyzer Pro", page_icon="📈", layout="wide")
 
-def get_amazon_data(marketplace, keyword):
+def get_amazon_data(marketplace, keyword, api_key):
     domains = {
         "Italia": "amazon.it",
         "USA": "amazon.com",
@@ -18,28 +17,29 @@ def get_amazon_data(marketplace, keyword):
     }
     
     domain = domains.get(marketplace, "amazon.it")
-    url = f"https://www.{domain}/s?k={keyword.replace(' ', '+')}&i=stripbooks"
+    target_url = f"https://www.{domain}/s?k={keyword.replace(' ', '+')}&i=stripbooks"
     
-    # Headers per simulare un browser reale
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-        "Accept-Language": "it-IT,it;q=0.9,en-US;q=0.8"
+    # Integrazione ScraperAPI: Maschera la richiesta per aggirare i blocchi
+    payload = {
+        'api_key': api_key, 
+        'url': target_url, 
+        'render': 'true', # Risolve JavaScript se necessario
+        'country_code': 'it' if marketplace == "Italia" else 'us'
     }
     
     try:
-        res = requests.get(url, headers=headers)
+        res = requests.get('http://api.scraperapi.com', params=payload)
+        
         if res.status_code != 200: 
             return None
             
         soup = BeautifulSoup(res.text, 'html.parser')
         results = []
         
-        # Analizza i risultati di ricerca
         for item in soup.find_all('div', {'data-component-type': 's-search-result'}):
             title_tag = item.h2
             title = title_tag.text.strip() if title_tag else "N/A"
             
-            # Estrazione Prezzo
             p_whole = item.find('span', 'a-price-whole')
             p_frac = item.find('span', 'a-price-fraction')
             price = 0.0
@@ -50,7 +50,6 @@ def get_amazon_data(marketplace, keyword):
                 except:
                     price = 0.0
             
-            # Estrazione Recensioni
             rev_tag = item.find('span', {'class': 'a-size-base s-underline-text'})
             reviews = 0
             if rev_tag:
@@ -59,7 +58,6 @@ def get_amazon_data(marketplace, keyword):
                 except:
                     reviews = 0
             
-            # Logica di Profitto basata sul Manuale Nicchie Profittevoli
             status = "Da valutare"
             if 12 <= price <= 25 and 50 < reviews < 500:
                 status = "Ottima (Margine + Domanda)"
@@ -77,29 +75,32 @@ def get_amazon_data(marketplace, keyword):
             
         return pd.DataFrame(results)
     except Exception as e:
-        st.error(f"Errore durante l'estrazione: {e}")
+        st.error(f"Errore di connessione: {e}")
         return None
 
 # --- Interfaccia Utente ---
 st.title("🚀 Amazon KDP Niche Analyzer")
-st.info("Analisi basata sui criteri di redditività del *Manuale delle Nicchie Profittevoli*.")
+st.info("Connessione protetta via ScraperAPI per evitare i blocchi di Amazon.")
 
 with st.sidebar:
-    st.header("Impostazioni di Ricerca")
+    st.header("Impostazioni")
+    api_key = st.text_input("Inserisci la tua ScraperAPI Key", type="password")
+    st.markdown("---")
     mkt = st.selectbox("Marketplace", ["Italia", "USA", "Spagna", "Francia", "Germania"])
     key = st.text_input("Parola Chiave (es. 'diario della gratitudine')")
     run = st.button("Analizza Mercato", type="primary")
 
 if run:
-    if key:
-        with st.spinner(f"Scansione in corso su {mkt}..."):
-            time.sleep(1) # Pausa per non sovraccaricare il server
-            df = get_amazon_data(mkt, key)
+    if not api_key:
+        st.error("⚠️ Inserisci la tua ScraperAPI Key nella barra laterale per procedere.")
+    elif key:
+        with st.spinner(f"Aggiramento blocchi in corso su {mkt}... (potrebbe richiedere 10-15 secondi)"):
+            df = get_amazon_data(mkt, key, api_key)
             
             if df is not None and not df.empty:
                 st.success(f"Trovati {len(df)} risultati per '{key}'.")
                 st.dataframe(df, use_container_width=True)
             else:
-                st.error("Nessun risultato trovato. Amazon potrebbe aver bloccato la richiesta (CAPTCHA) o la parola chiave è errata.")
+                st.error("La scansione è fallita. Verifica che la API Key sia corretta.")
     else:
         st.warning("Inserisci una parola chiave per iniziare.")
