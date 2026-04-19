@@ -1,0 +1,1 @@
+# kdp-niche-analyzer
