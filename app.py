@@ -7,11 +7,11 @@ import re
 import openai
 
 # ==============================================================================
-# 1. DESIGN SYSTEM ELITE (MASTER DARK THEME)
+# 1. DESIGN SYSTEM ELITE (DARK MODE OPTIMIZED)
 # ==============================================================================
 st.set_page_config(
-    page_title="KDP OMNI-REASONER MASTERPIECE 2.3",
-    page_icon="🤖",
+    page_title="KDP OMNI-REASONER 3.0",
+    page_icon="🧠",
     layout="wide",
     initial_sidebar_state="expanded" 
 )
@@ -21,56 +21,42 @@ st.markdown("""
         #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
         [data-testid="collapsedControl"] { display: none !important; }
         
-        /* SIDEBAR DARK */
         section[data-testid="stSidebar"] {
             min-width: 450px !important;
             background-color: #0d1117 !important;
             border-right: 1px solid #30363d;
         }
-        [data-testid="stSidebar"] .stMarkdown p, [data-testid="stSidebar"] label, 
-        [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3,
-        [data-testid="stSidebar"] .stExpander p { color: #f0f6fc !important; }
-        [data-testid="stSidebar"] input, [data-testid="stSidebar"] select {
-            background-color: #161b22 !important; color: #ffffff !important; border: 1px solid #30363d !important;
-        }
 
-        /* FIX METRICHE: Valori scuri su fondo bianco */
+        /* FIX COLORI METRICHE */
         [data-testid="stMetricValue"] { color: #1f2328 !important; font-weight: 800 !important; }
         [data-testid="stMetricLabel"] { color: #444c56 !important; }
         .stMetric { background-color: #ffffff !important; border-left: 8px solid #0969da !important; padding: 15px !important; border-radius: 12px !important; }
 
-        /* BOX LOGICA AI */
+        /* BOX RAGIONAMENTO AI */
         .gpt-logic-box { background-color: #1c2128; border-left: 5px solid #3182ce; padding: 15px; border-radius: 8px; color: #90cdf4; font-size: 0.88rem; margin-bottom: 20px; }
         .ai-audit-card { background-color: #fff9db; border-left: 6px solid #fab005; padding: 20px; border-radius: 10px; color: #856404; margin-bottom: 25px; }
         
-        /* CARTE EDITORIALI */
+        /* CARTE EDITORIALI PROFESSIONALI */
         .editorial-card { 
-            background-color: #ffffff; border: 1px solid #e1e4e8; padding: 25px; 
-            border-radius: 12px; margin-bottom: 20px; border-top: 6px solid #28a745; 
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05); 
+            background-color: #ffffff; border: 1px solid #e1e4e8; padding: 30px; 
+            border-radius: 15px; margin-bottom: 25px; border-top: 8px solid #28a745; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1); 
         }
+        .title-option { color: #cf222e; font-size: 1.5rem; font-weight: 800; display: block; margin-bottom: 10px; border-bottom: 2px solid #f6f8fa; padding-bottom: 10px; }
+        .marketing-angle { color: #0969da; font-weight: 700; font-size: 0.95rem; margin-bottom: 15px; display: block; background: #f0f9ff; padding: 5px 10px; border-radius: 5px; }
+        .plot-detailed { color: #24292f; line-height: 1.7; font-size: 1.05rem; white-space: pre-wrap; }
 
-        /* PIVOT CARD - NUOVO STILE DARK PROFESSIONALE */
+        /* PIVOT CARD DARK */
         .pivot-card {
-            background-color: #1c2128; 
-            border: 1px solid #444c56; 
-            padding: 25px;
-            border-radius: 12px; 
-            margin-bottom: 20px; 
-            border-left: 6px solid #673ab7;
+            background-color: #1c2128; border: 1px solid #444c56; padding: 20px;
+            border-radius: 12px; margin-bottom: 20px; border-left: 6px solid #673ab7;
             color: #f0f6fc !important;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
         }
-        .pivot-card b, .pivot-card strong { color: #d1c4e9 !important; }
-
-        .title-option { color: #cf222e; font-size: 1.4rem; font-weight: bold; display: block; margin-bottom: 10px; }
-        .marketing-logic { color: #0969da; font-weight: 600; font-size: 0.9rem; margin-bottom: 10px; display: block; }
-        .plot-detailed { color: #24292f; line-height: 1.6; font-size: 1rem; }
     </style>
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 2. ACCESSO AI SECRET & CONFIGURAZIONE AI
+# 2. ACCESSO AI SECRET & CLIENT SETUP
 # ==============================================================================
 try:
     OPENAI_KEY = st.secrets["OPENAI_API_KEY"]
@@ -78,18 +64,22 @@ try:
     client = openai.OpenAI(api_key=OPENAI_KEY)
     API_READY = True
 except Exception:
-    st.error("⚠️ Configurazione Secret mancante (OPENAI_API_KEY o WS_API_KEY).")
+    st.error("⚠️ Configurazione Secret mancante o errata.")
     API_READY = False
 
+# ==============================================================================
+# 3. CLASSE SURGICAL AI (RAGIONAMENTO INTEGRATO)
+# ==============================================================================
 class SurgicalAI:
     @staticmethod
     def brainstorm_keyword(p_type, p_target, p_pain, p_dream):
+        """Genera una keyword analizzando la psiche del target."""
         prompt = f"""
-        Sei un esperto Senior di KDP Marketing. Diagnosi:
+        Sei un esperto Senior di KDP Marketing. Diagnosi Persona:
         - FORMATO: {p_type} | TARGET: {p_target} | DOLORE: {p_pain} | SOGNO: {p_dream}
         COMPITO:
-        1. Crea una keyword 'Bisturi' (Long Tail) ad alta conversione per Amazon Libri.
-        2. Spiega il White Space psicologico in 2 righe.
+        1. Crea una keyword Long Tail chirurgica ad alta conversione.
+        2. Spiega la leva psicologica d'acquisto in 2 righe.
         RISPOSTA: KEYWORD: [testo] | LOGICA: [testo]
         """
         response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}])
@@ -97,32 +87,43 @@ class SurgicalAI:
 
     @staticmethod
     def executive_audit(df, query, p_target):
-        titles = " | ".join(df['Titolo'].tolist()[:10])
+        """Audit qualitativo basato sui titoli reali dei competitor."""
+        titles = " | ".join(df['Titolo'].tolist()[:15])
         avg_price = df['Prezzo'].mean()
-        prompt = f"Analizza 20 risultati Amazon per '{query}'. Prezzo Medio: {avg_price:.2f}€. Titoli: {titles}. Audit di 3 righe per il target '{p_target}'."
+        prompt = f"""
+        Analizza 20 competitor Amazon per '{query}'. Prezzo Medio: {avg_price:.2f}€. 
+        Titoli trovati: {titles}.
+        Fornisci un Audit Chirurgico per il target '{p_target}': identifica i 'nervi scoperti' della concorrenza e perché il nostro libro vincerà.
+        """
         response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}])
         return response.choices[0].message.content
 
     @staticmethod
     def genera_master_plan(p_type, p_target, p_pain, p_dream, kw):
-        prompt = f"Genera 5 proposte editoriali per un libro '{p_type}' basato su '{kw}'. Target: {p_target}. Problema: {p_pain}. Sogno: {p_dream}. Per ogni opzione: TITOLO, LOGICA MARKETING, TRAMA DETTAGLIATA."
-        response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}])
-        return response.choices[0].message.content
-
-    @staticmethod
-    def genera_pivot_strategici(p_target, p_pain, p_dream, kw_fallita):
-        """Genera pivot intelligenti se la nicchia è satura."""
+        """Genera 5 titoli e trame pronti alla pubblicazione."""
         prompt = f"""
-        La keyword '{kw_fallita}' per '{p_target}' è troppo competitiva.
-        Basandoti sul dolore '{p_pain}' e sul sogno '{p_dream}', suggerisci 3 Keyword Pivot meno sature ma alto-spendenti.
-        Spiega perché queste alternative sono più 'chirurgiche'.
-        FORMATO: 1. [KEYWORD] - [LOGICA]
+        Agisci come Editor-in-Chief. Crea 5 proposte editoriali per un libro '{p_type}' sulla keyword '{kw}'.
+        Target: {p_target}. Dolore: {p_pain}. Sogno: {p_dream}.
+        
+        Per ogni opzione fornisci:
+        1. TITOLO: Accattivante con trigger emotivo.
+        2. ANGOLO DI MARKETING: La promessa unica del libro.
+        3. TRAMA DETTAGLIATA: Almeno 150 parole che descrivano la trasformazione del lettore e i punti chiave del contenuto.
+        
+        Formatta in modo che sia leggibile professionalmente.
         """
         response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}])
         return response.choices[0].message.content
 
+    @staticmethod
+    def genera_pivot(p_target, p_pain, p_dream, kw_fallita):
+        """Reindirizzamento se la nicchia è satura."""
+        prompt = f"La keyword '{kw_fallita}' per '{p_target}' è satura. Suggerisci 3 Keyword Pivot basate su dolore '{p_pain}' e sogno '{p_dream}' con spiegazione strategica."
+        response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}])
+        return response.choices[0].message.content
+
 # ==============================================================================
-# 3. MOTORE DI SCRAPING CATEGORICO
+# 4. MOTORE DI SCRAPING (CATEGORICO 20 RISULTATI)
 # ==============================================================================
 def run_strategic_scan(mkt, keyword, pages):
     domains = {"Italia": "amazon.it", "USA": "amazon.com", "Spagna": "amazon.es", "Francia": "amazon.fr", "Germania": "amazon.de"}
@@ -147,25 +148,25 @@ def run_strategic_scan(mkt, keyword, pages):
     except: return None
 
 # ==============================================================================
-# 4. SIDEBAR COMMAND CENTER
+# 5. SIDEBAR: INTELLIGENZA PREDITTIVA
 # ==============================================================================
 if 'kw_active' not in st.session_state: st.session_state['kw_active'] = ""
 if 'ai_logic' not in st.session_state: st.session_state['ai_logic'] = ""
 
 with st.sidebar:
-    st.title("🛡️ OMNI-STRATEGY AI")
+    st.title("🛡️ KDP OMNI-REASONER 3.0")
     if st.button("🔄 NUOVA SESSIONE", use_container_width=True):
         st.session_state['kw_active'] = ""; st.session_state['ai_logic'] = ""; st.rerun()
 
     st.markdown("---")
-    st.subheader("📋 Diagnosi Buyer Persona")
-    p_type = st.selectbox("Formato", ["Manuale Pratico", "Workbook", "Diario", "Guida Passo-Passo"])
-    p_target = st.text_input("Target", placeholder="es. Manager")
-    p_pain = st.text_input("Dolore", placeholder="es. stress")
-    p_dream = st.text_input("Sogno", placeholder="es. serenità")
+    st.subheader("👤 Analisi Predittiva Target")
+    p_type = st.selectbox("Formato", ["Manuale Pratico", "Workbook", "Diario Strategico", "Guida Passo-Passo"])
+    p_target = st.text_input("Target", placeholder="es. Imprenditori sopraffatti")
+    p_pain = st.text_input("Problema", placeholder="es. troppe decisioni al giorno")
+    p_dream = st.text_input("Sogno", placeholder="es. focus laser e tempo libero")
     
     if st.button("🧠 GENERA STRATEGIA AI", use_container_width=True, type="primary") and API_READY:
-        with st.spinner("L'AI sta dissezionando il mercato..."):
+        with st.spinner("L'AI sta dissezionando il bisogno..."):
             res = SurgicalAI.brainstorm_keyword(p_type, p_target, p_pain, p_dream)
             if "KEYWORD:" in res:
                 st.session_state['kw_active'] = res.split("KEYWORD:")[1].split("|")[0].strip()
@@ -173,33 +174,34 @@ with st.sidebar:
             else: st.write(res)
 
     if st.session_state['ai_logic']:
-        st.markdown(f'<div class="gpt-logic-box"><b>AI LOGIC:</b><br>{st.session_state["ai_logic"]}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="gpt-logic-box"><b>AI STRATEGIC INSIGHT:</b><br>{st.session_state["ai_logic"]}</div>', unsafe_allow_html=True)
 
     st.markdown("---")
     mkt = st.selectbox("Marketplace Amazon", ["Italia", "USA", "Spagna", "Francia", "Germania"])
-    query = st.text_input("🔍 Focus Keyword", value=st.session_state['kw_active'])
-    pgs = st.number_input("Pagine Libro", min_value=24, value=120)
-    run_btn = st.button("LANCIA ANALISI CATEGORICA", use_container_width=True)
+    query = st.text_input("🔍 Keyword Focus", value=st.session_state['kw_active'])
+    pgs = st.number_input("Pagine Stimate", min_value=24, value=120)
+    run_btn = st.button("LANCIA DISSEZIONE CHIRURGICA", use_container_width=True)
 
 # ==============================================================================
-# 5. DASHBOARD: ANALISI & PIVOT DARK
+# 6. DASHBOARD: VERDETTO E REDAZIONE FINALE
 # ==============================================================================
 if run_btn and query and API_READY:
-    st.header(f"📚 Report Strategico: {query.upper()}")
+    st.header(f"📊 Report Strategico: {query.upper()}")
     
-    with st.spinner("Analisi di 20 competitor editoriali..."):
+    with st.spinner("Analisi di 20 competitor e Audit AI in corso..."):
         df = run_strategic_scan(mkt, query, pgs)
         
         if df is not None and not df.empty:
-            audit_res = SurgicalAI.executive_audit(client, df, query, p_target)
-            st.markdown(f'<div class="ai-audit-card"><b>🤖 AI EXECUTIVE AUDIT:</b><br>{audit_res}</div>', unsafe_allow_html=True)
+            # Audit Qualitativo GPT
+            audit_res = SurgicalAI.executive_audit(df, query, p_target)
+            st.markdown(f'<div class="ai-audit-card"><b>🤖 AI EXECUTIVE AUDIT (Qualitativo):</b><br>{audit_res}</div>', unsafe_allow_html=True)
 
             st.dataframe(df, column_config={"Preview": st.column_config.ImageColumn("Preview")}, use_container_width=True, hide_index=True)
             
             avg_p = df['Prezzo'].mean()
             self_ratio = (len(df[df["Self-Pub"] == "Sì"]) / len(df)) * 100
             o_score = 40
-            if avg_p > 13: o_score += 30
+            if avg_p > 13.50: o_score += 30
             if self_ratio > 40: o_score += 30
             
             st.markdown("---")
@@ -210,30 +212,24 @@ if run_btn and query and API_READY:
 
             if o_score >= 60:
                 st.markdown("---")
-                st.header("✍️ Master Plan Editoriale")
-                with st.spinner("Scrittura contenuti..."):
+                st.header("✍️ Piano Editoriale di Pubblicazione")
+                with st.spinner("L'AI sta redigendo i titoli e le trame..."):
                     master_plan = SurgicalAI.genera_master_plan(p_type, p_target, p_pain, p_dream, query)
+                    # Formattazione per rendere i titoli rossi e le trame leggibili
                     formatted_plan = (master_plan
                         .replace("TITOLO:", " <span class='title-option'>")
-                        .replace("LOGICA DI MARKETING:", "</span> <span class='marketing-logic'>")
+                        .replace("ANGOLO DI MARKETING:", "</span> <span class='marketing-angle'>")
                         .replace("TRAMA DETTAGLIATA:", "</span> <div class='plot-detailed'>")
-                        .replace("- ", "<br>• ")
+                        .replace("1.", "<br><b>1.</b>").replace("2.", "<br><b>2.</b>")
+                        .replace("3.", "<br><b>3.</b>").replace("4.", "<br><b>4.</b>")
+                        .replace("5.", "<br><b>5.</b>")
                     )
                     st.markdown(f'<div class="editorial-card">{formatted_plan}</div> </div>', unsafe_allow_html=True)
             else:
-                # SEZIONE PIVOT DARK
                 st.markdown("---")
                 st.header("🔄 Reindirizzamento Strategico (AI Pivot)")
-                st.warning("⚠️ Score insufficiente. Lo Stratega AI ha elaborato queste vie d'uscita:")
-                with st.spinner("Generazione Pivot in corso..."):
-                    pivot_logic = SurgicalAI.genera_pivot_strategici(p_target, p_pain, p_dream, query)
-                    # Visualizzazione Dark
-                    st.markdown(f"""
-                        <div class="pivot-card">
-                            <b>Protocollo di Salvataggio Attivo:</b><br>
-                            {pivot_logic.replace("1.", "<br><b>1.</b>").replace("2.", "<br><b>2.</b>").replace("3.", "<br><b>3.</b>")}
-                        </div>
-                    """, unsafe_allow_html=True)
-                    st.info("💡 Usa una di queste keyword per rieffettuare la ricerca.")
+                st.warning("⚠️ Score insufficiente. L'AI suggerisce di cambiare angolo di attacco:")
+                pivot_res = SurgicalAI.genera_pivot(p_target, p_pain, p_dream, query)
+                st.markdown(f'<div class="pivot-card">{pivot_res}</div>', unsafe_allow_html=True)
         else:
-            st.error("Errore di scansione. Amazon ha limitato la richiesta.")
+            st.error("Errore Amazon. Riprova tra 60 secondi o controlla i crediti API.")
