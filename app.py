@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 # ==============================================================================
 # 1. DESIGN SYSTEM: CONTRASTO BIANCO/NERO & RIMOZIONE MENU
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 11.8", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 11.9", page_icon="🛡️", layout="wide")
 
 st.markdown("""
     <style>
@@ -114,10 +114,10 @@ def get_amazon_data(mkt, keyword):
     return pd.DataFrame(results)
 
 # ==============================================================================
-# 4. SIDEBAR CON GENERAZIONE STRATEGICA
+# 4. SIDEBAR CON GENERAZIONE SILENZIOSA (SOLO KEYWORD)
 # ==============================================================================
 with st.sidebar:
-    st.title("🛡️ STRATEGY LAB 11.8")
+    st.title("🛡️ STRATEGY LAB 11.9")
     if st.button("🔄 RESET"):
         st.session_state.data, st.session_state.suggestions, st.session_state.suggested_kws = None, None, ""
         st.rerun()
@@ -130,17 +130,24 @@ with st.sidebar:
     if st.button("🔍 GENERA KEYWORD CHIRURGICHE"):
         if not nicchia or not target: st.error("Inserisci nicchia e target!")
         else:
-            with st.spinner("Ragionamento strategico..."):
+            with st.spinner("Estrazione keyword..."):
                 client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                prompt_kw = f"Agisci come esperto SEO Amazon. Nicchia: {nicchia}, Genere: {genere}, Target: {target}. Genera 5 keyword long-tail specifiche separate da virgola."
-                st.session_state.suggested_kws = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt_kw}]).choices[0].message.content
+                # PROMPT BLINDATO: Solo keyword, nessun commento.
+                prompt_kw = (
+                    f"Agisci come esperto SEO Amazon. Nicchia: {nicchia}, Genere: {genere}, Target: {target}. "
+                    "Genera 5 keyword long-tail specifiche separate da virgola. "
+                    "NON scrivere introduzioni, NON scrivere conclusioni, NON aggiungere commenti. "
+                    "Rispondi SOLO ed ESCLUSIVAMENTE con la lista di keyword."
+                )
+                res = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt_kw}])
+                st.session_state.suggested_kws = res.choices[0].message.content
 
     if st.session_state.suggested_kws:
         st.info(f"Suggerite: {st.session_state.suggested_kws}")
         kw_selezionata = st.text_input("Keyword finale:", value=st.session_state.suggested_kws.split(',')[0].strip())
         
         if st.button("🚀 LANCIA ANALISI TRIPLE-ENGINE", type="primary"):
-            with st.spinner("Analisi e drafting in corso..."):
+            with st.spinner("Analisi e drafting..."):
                 df = get_amazon_data("Italia", kw_selezionata)
                 if not df.empty:
                     st.session_state.data, st.session_state.kw = df, kw_selezionata
@@ -149,7 +156,7 @@ with st.sidebar:
                     
                     if st.session_state.score >= 60:
                         client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                        prompt_book = f"Analisi POSITIVA per '{kw_selezionata}' ({genere}) per il target '{target}'. Genera 3 libri. Formato OBBLIGATORIO per ogni libro: [BLOCK] TITOLO: [testo] | TRAMA: [testo]. Sii molto attinente alla keyword."
+                        prompt_book = f"Analisi POSITIVA per '{kw_selezionata}' ({genere}) per il target '{target}'. Genera 3 libri. Formato OBBLIGATORIO: [BLOCK] TITOLO: [testo] | TRAMA: [testo]."
                         st.session_state.suggestions = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt_book}]).choices[0].message.content
                     else: st.session_state.suggestions = "NEGATIVE"
                 else: st.error("⚠️ Nessun dato trovato. Riprova.")
@@ -171,12 +178,10 @@ if st.session_state.data is not None:
         st.error(f"❌ ANALISI NEGATIVA: La keyword '{st.session_state.kw}' non è profittevole secondo i criteri strategici.")
     elif st.session_state.suggestions:
         st.success(f"✅ ANALISI POSITIVA! Ecco i titoli e le trame per '{st.session_state.kw}':")
-        # PARSER ROBUSTO: Splitto per il tag speciale [BLOCK]
         items = st.session_state.suggestions.split("[BLOCK]")
         for item in items:
             if "|" in item and "TITOLO" in item.upper():
                 parts = item.split("|")
-                # Estrazione pulita
                 t_clean = parts[0].replace("TITOLO:", "").replace("Titolo:", "").strip()
                 p_clean = parts[1].replace("TRAMA:", "").replace("Trama:", "").strip()
                 st.markdown(f"""
