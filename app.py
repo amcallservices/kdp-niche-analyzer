@@ -11,7 +11,7 @@ import urllib.parse
 # 1. CONFIGURAZIONE UI & SIDEBAR DARK
 # ==============================================================================
 st.set_page_config(
-    page_title="KDP NICHE & PERSONA VALIDATOR - WS.AI",
+    page_title="KDP NICHE & PERSONA VALIDATOR - ELITE",
     page_icon="👤",
     layout="wide",
     initial_sidebar_state="expanded" 
@@ -64,8 +64,8 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- CHIAVE API WEBSCRAPING.AI ---
-WS_API_KEY = "INSERISCI_QUI_LA_TUA_CHIAVE_WEBSCRAPING_AI"
+# --- CHIAVE API WEBSCRAPING.AI (Sostituisci con la tua) ---
+WS_API_KEY = "INSERISCI_QUI_LA_TUA_CHIAVE"
 
 # ==============================================================================
 # 2. LOGICA DI BUSINESS
@@ -99,41 +99,30 @@ class KDPBrain:
         return round((price * 0.60) - cost, 2)
 
     @staticmethod
-    def generate_editorial_proposal(target, pain, dream, keyword):
+    def generate_editorial_proposal(type_book, target, pain, dream, keyword):
         titles = [
-            f"BASTA {pain.upper()}: La Guida per {target} che vogliono {dream}",
-            f"{keyword.title()}: Trasforma {pain} in {dream}",
-            f"Oltre {pain.capitalize()}: Come sconfiggere il problema per {target}"
+            f"{type_book.upper()}: Basta {pain.capitalize()} per {target}",
+            f"{keyword.title()}: Il Metodo per {dream}",
+            f"Oltre {pain.capitalize()}: {type_book} Strategico per {target}"
         ]
-        plot = f"Un manuale scritto appositamente per {target}. Se combatti ogni giorno contro {pain}, questo libro è la tua mappa verso {dream}."
+        plot = f"Questo {type_book} è stato progettato per aiutare ogni {target} a superare {pain} e raggiungere finalmente {dream}."
         return titles, plot
 
 # ==============================================================================
-# 3. MOTORE DI SCRAPING (WEBSCRAPING.AI EDITION)
+# 3. MOTORE DI SCRAPING (WEBSCRAPING.AI)
 # ==============================================================================
 def scrape_books_ws(mkt, keyword, pages, is_color):
     domains = {"Italia": "amazon.it", "USA": "amazon.com", "Spagna": "amazon.es", "Francia": "amazon.fr", "Germania": "amazon.de"}
     domain = domains.get(mkt, "amazon.it")
     target_url = f"https://www.{domain}/s?k={keyword.replace(' ', '+')}&i=stripbooks"
-    
     try:
-        # Chiamata a WebScraping.ai
         response = requests.get(
             'https://api.webscraping.ai/html',
-            params={
-                'api_key': WS_API_KEY,
-                'url': target_url,
-                'proxy': 'residential', # Essenziale per Amazon
-                'timeout': 30000 # 30 secondi
-            }
+            params={'api_key': WS_API_KEY, 'url': target_url, 'proxy': 'residential'}
         )
-        
-        if response.status_code != 200:
-            return None
-
+        if response.status_code != 200: return None
         soup = BeautifulSoup(response.text, 'html.parser')
         items = soup.find_all('div', {'data-component-type': 's-search-result'})[:15]
-        
         results = []
         p_bar = st.progress(0)
         for i, item in enumerate(items):
@@ -142,8 +131,6 @@ def scrape_books_ws(mkt, keyword, pages, is_color):
             p_w = item.find('span', 'a-price-whole')
             p_f = item.find('span', 'a-price-fraction')
             price = float(f"{p_w.text.replace(',','').replace('.','')}.{p_f.text}") if p_w and p_f else 0.0
-            
-            # Deep Scan per BSR (usando la stessa logica WS.ai)
             bsr = 0
             is_self = False
             link_tag = item.find('a', class_='a-link-normal s-no-outline')
@@ -155,7 +142,6 @@ def scrape_books_ws(mkt, keyword, pages, is_color):
                     m = re.search(r'(?:n\.|#)\s*([0-9.,]+)\s*in', ps)
                     if m: bsr = int(m.group(1).replace('.', '').replace(',', ''))
                     is_self = any(x in ps for x in ["indipendentemente pubblicato", "independently published", "kdp"])
-
             roy = KDPBrain.calculate_royalty(price, pages, is_color)
             sales = KDPBrain.estimate_sales(bsr)
             results.append({
@@ -164,14 +150,11 @@ def scrape_books_ws(mkt, keyword, pages, is_color):
                 "Vendite": sales, "Profitto": round(sales * roy, 2), "Self-Pub": "Sì" if is_self else "No"
             })
             p_bar.progress((i + 1) / len(items))
-        
         return pd.DataFrame(results)
-    except Exception as e:
-        st.error(f"Errore API: {e}")
-        return None
+    except: return None
 
 # ==============================================================================
-# 4. SIDEBAR: PERSONA & ISTRUZIONI
+# 4. SIDEBAR: PERSONA & TIPOLOGIA LIBRO (MIRATA)
 # ==============================================================================
 if 'kw_active' not in st.session_state:
     st.session_state['kw_active'] = ""
@@ -179,28 +162,22 @@ if 'kw_active' not in st.session_state:
 with st.sidebar:
     st.title("🛡️ STRATEGY COMMAND")
     
-    with st.expander("📖 Guida Rapida"):
-        st.markdown("""
-        1. Compila i dati della **Persona**.
-        2. Usa **🎯 Genera** o scegli dai **Suggerimenti**.
-        3. Imposta i parametri tecnici del libro.
-        4. Analizza. Se lo Score < 60, guarda i **Consigli di Salvataggio**.
-        """)
-
     if st.button("🔄 NUOVA ANALISI", use_container_width=True):
         st.session_state['kw_active'] = ""; st.rerun()
 
     st.markdown("---")
-    st.subheader("👤 Identikit Persona")
-    p_target = st.text_input("Target", placeholder="es. Imprenditori")
-    p_pain = st.text_input("Problema", placeholder="es. burnout")
-    p_dream = st.text_input("Desiderio", placeholder="es. libertà di tempo")
+    st.subheader("👤 Identikit Persona & Libro")
+    with st.expander("Parametri Mirati", expanded=True):
+        p_type = st.text_input("Angolo Editoriale", placeholder="es. Manuale, Workbook, Raccolta")
+        p_target = st.text_input("Target", placeholder="es. Donne in carriera")
+        p_pain = st.text_input("Problema", placeholder="es. gestione tempo")
+        p_dream = st.text_input("Risultato", placeholder="es. equilibrio vita-lavoro")
     
-    if p_pain and p_dream:
-        k_sug = f"{p_pain.capitalize()} per {p_target}: Guida al {p_dream}"
+    # GENERAZIONE KEYWORD MIRATA
+    if p_type and p_pain and p_target:
+        k_sug = f"{p_type.capitalize()} di {p_pain} per {p_target}"
         if st.button(f"🎯 Genera: {k_sug}", use_container_width=True):
-            st.session_state['kw_active'] = k_sug
-            st.rerun()
+            st.session_state['kw_active'] = k_sug; st.rerun()
 
     st.markdown("---")
     mkt = st.selectbox("Marketplace", ["Italia", "USA", "Spagna", "Francia", "Germania"])
@@ -222,15 +199,15 @@ with st.sidebar:
 # 5. DASHBOARD PRINCIPALE
 # ==============================================================================
 if run and query:
-    st.header(f"📊 Business Analysis: {query.upper()}")
+    st.header(f"📊 Analisi di Mercato: {query.upper()}")
     
     st.markdown(f"""
     <div class="persona-card">
-        <b>Buyer Persona:</b> {p_target} | <b>Pain Point:</b> {p_pain} | <b>Desire:</b> {p_dream}
+        <b>Formato:</b> {p_type} | <b>Target:</b> {p_target} | <b>Pain Point:</b> {p_pain}
     </div>
     """, unsafe_allow_html=True)
 
-    with st.spinner("Analisi di mercato in corso (WebScraping.ai Residentials)..."):
+    with st.spinner("Scansione in corso..."):
         df = scrape_books_ws(mkt, query, pgs, is_color)
         
         if df is not None and not df.empty:
@@ -255,7 +232,7 @@ if run and query:
             if o_score >= 60:
                 st.markdown("---")
                 st.header("✍️ Proposta Editoriale Sbloccata")
-                titles, plot = KDPBrain.generate_editorial_proposal(p_target, p_pain, p_dream, query)
+                titles, plot = KDPBrain.generate_editorial_proposal(p_type, p_target, p_pain, p_dream, query)
                 col_t, col_p = st.columns([1, 1.5])
                 with col_t:
                     st.subheader("📌 Titoli Hook")
@@ -265,18 +242,17 @@ if run and query:
                     st.subheader("📖 Bozza Trama")
                     st.markdown(f"<div class='editorial-card'><p class='plot-text'>{plot}</p></div>", unsafe_allow_html=True)
             else:
-                st.warning("⚠️ Nicchia non profittevole. Avvio strategie di recupero...")
-                st.header("🔄 Strategie di Recupero (Pivoting)")
-                rescue_kws = [f"Workbook {query}", f"{p_pain.title()} per {p_target} principianti", f"Manuale {p_target} {p_pain.lower()}"]
-                rcol1, rcol2, rcol3 = st.columns(3)
+                st.warning("⚠️ Score basso. Prova una delle alternative qui sotto:")
+                rescue_kws = [f"{p_type} per principianti {p_target}", f"{p_type} pratico {p_pain}", f"Guida a {p_pain} {p_type}"]
+                rcols = st.columns(3)
                 for i, rk in enumerate(rescue_kws):
-                    if [rcol1, rcol2, rcol3][i].button(f"🔍 Prova: {rk}", key=f"res_{i}", use_container_width=True):
+                    if rcols[i].button(f"🔍 Prova: {rk}", key=f"res_{i}", use_container_width=True):
                         st.session_state['kw_active'] = rk; st.rerun()
 
             st.markdown("---")
-            st.subheader("💡 Keyword Alternative (Viola)")
+            st.subheader("💡 Keyword Strategiche Alternative (Viola)")
             ca1, ca2 = st.columns(2)
-            ca1.markdown(f"<div class='keyword-alt-card'><b>Focus Problema:</b><br>{p_target.title()} e {p_pain.lower()}</div>", unsafe_allow_html=True)
-            ca2.markdown(f"<div class='keyword-alt-card'><b>Focus Risultato:</b><br>Come ottenere {p_dream.lower()}</div>", unsafe_allow_html=True)
+            ca1.markdown(f"<div class='keyword-alt-card'><b>Focus Problema:</b><br>{p_type.title()} su {p_pain.lower()}</div>", unsafe_allow_html=True)
+            ca2.markdown(f"<div class='keyword-alt-card'><b>Focus Risultato:</b><br>{p_type.title()} per {p_dream.lower()}</div>", unsafe_allow_html=True)
         else:
-            st.error("Errore Amazon o API limitata. Controlla i crediti su WebScraping.ai.")
+            st.error("Errore Amazon. Riprova tra 60 secondi.")
