@@ -8,10 +8,10 @@ import io
 import urllib.parse
 
 # ==============================================================================
-# 1. CONFIGURAZIONE UI ELITE (SIDEBAR DARK E FISSA)
+# 1. CONFIGURAZIONE UI & SIDEBAR DARK
 # ==============================================================================
 st.set_page_config(
-    page_title="KDP NICHE & PERSONA VALIDATOR PRO",
+    page_title="KDP NICHE & PERSONA VALIDATOR - WS.AI",
     page_icon="👤",
     layout="wide",
     initial_sidebar_state="expanded" 
@@ -50,7 +50,6 @@ st.markdown("""
         .title-option { color: #cf222e; font-size: 1.3rem; font-weight: bold; margin-bottom: 10px; display: block; }
         .plot-text { color: #24292f; font-style: italic; line-height: 1.6; }
         
-        /* KEYWORD SUGGERITE (VIOLA) */
         .keyword-alt-card {
             background-color: #f3e5f5; border: 1px solid #d1c4e9;
             padding: 15px; border-radius: 8px; margin-bottom: 10px;
@@ -65,19 +64,19 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# --- CHIAVE API WEBSCRAPING.AI ---
+WS_API_KEY = "INSERISCI_QUI_LA_TUA_CHIAVE_WEBSCRAPING_AI"
+
 # ==============================================================================
 # 2. LOGICA DI BUSINESS
 # ==============================================================================
-API_KEY = "ce57dc2330590954355f5c12171c7ce9"
-
 class KDPFreeTools:
     @staticmethod
     def get_amazon_suggestions(keyword, mkt_code):
         mkt_map = {"Italia": "it", "USA": "com", "Spagna": "es", "Francia": "fr", "Germania": "de"}
         suffix = mkt_map.get(mkt_code, "it")
-        url = f"https://completion.amazon.com/api/2017/suggestions?limit=10&prefix={urllib.parse.quote(keyword)}&alias=stripbooks&mid=ATVPDKIKX0DER"
-        if suffix == "it": url = url.replace("com", "it").replace("ATVPDKIKX0DER", "APJ6JRA9NG5V4")
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
+        url = f"https://completion.amazon.com/api/2017/suggestions?limit=10&prefix={urllib.parse.quote(keyword)}&alias=stripbooks"
+        headers = {"User-Agent": "Mozilla/5.0"}
         try:
             r = requests.get(url, headers=headers, timeout=5)
             if r.status_code == 200: return [s['value'] for s in r.json()['suggestions']]
@@ -104,26 +103,37 @@ class KDPBrain:
         titles = [
             f"BASTA {pain.upper()}: La Guida per {target} che vogliono {dream}",
             f"{keyword.title()}: Trasforma {pain} in {dream}",
-            f"{target}: Come sconfiggere {pain} e vivere {dream}"
+            f"Oltre {pain.capitalize()}: Come sconfiggere il problema per {target}"
         ]
         plot = f"Un manuale scritto appositamente per {target}. Se combatti ogni giorno contro {pain}, questo libro è la tua mappa verso {dream}."
         return titles, plot
 
 # ==============================================================================
-# 3. CORE SCRAPER (CATEGORICO LIBRI)
+# 3. MOTORE DI SCRAPING (WEBSCRAPING.AI EDITION)
 # ==============================================================================
-def scrape_books(mkt, keyword, pages, is_color):
+def scrape_books_ws(mkt, keyword, pages, is_color):
     domains = {"Italia": "amazon.it", "USA": "amazon.com", "Spagna": "amazon.es", "Francia": "amazon.fr", "Germania": "amazon.de"}
     domain = domains.get(mkt, "amazon.it")
-    country = 'it' if mkt == "Italia" else 'us'
-    url = f"https://www.{domain}/s?k={keyword.replace(' ', '+')}&i=stripbooks"
+    target_url = f"https://www.{domain}/s?k={keyword.replace(' ', '+')}&i=stripbooks"
+    
     try:
-        res = requests.get('http://api.scraperapi.com', params={'api_key': API_KEY, 'url': url, 'country_code': country}, timeout=60)
-        if res.status_code != 200: return None
-        soup = BeautifulSoup(res.text, 'html.parser')
-        items = soup.find_all('div', {'data-component-type': 's-search-result'})[:15]
-        if not items: return None
+        # Chiamata a WebScraping.ai
+        response = requests.get(
+            'https://api.webscraping.ai/html',
+            params={
+                'api_key': WS_API_KEY,
+                'url': target_url,
+                'proxy': 'residential', # Essenziale per Amazon
+                'timeout': 30000 # 30 secondi
+            }
+        )
+        
+        if response.status_code != 200:
+            return None
 
+        soup = BeautifulSoup(response.text, 'html.parser')
+        items = soup.find_all('div', {'data-component-type': 's-search-result'})[:15]
+        
         results = []
         p_bar = st.progress(0)
         for i, item in enumerate(items):
@@ -132,17 +142,20 @@ def scrape_books(mkt, keyword, pages, is_color):
             p_w = item.find('span', 'a-price-whole')
             p_f = item.find('span', 'a-price-fraction')
             price = float(f"{p_w.text.replace(',','').replace('.','')}.{p_f.text}") if p_w and p_f else 0.0
+            
+            # Deep Scan per BSR (usando la stessa logica WS.ai)
             bsr = 0
             is_self = False
             link_tag = item.find('a', class_='a-link-normal s-no-outline')
             if link_tag:
-                p_url = f"https://www.{domain}" + link_tag['href']
-                res_p = requests.get('http://api.scraperapi.com', params={'api_key': API_KEY, 'url': p_url, 'country_code': country}, timeout=30)
+                book_url = f"https://www.{domain}" + link_tag['href']
+                res_p = requests.get('https://api.webscraping.ai/html', params={'api_key': WS_API_KEY, 'url': book_url, 'proxy': 'residential'})
                 if res_p.status_code == 200:
                     ps = BeautifulSoup(res_p.text, 'html.parser').get_text().lower()
                     m = re.search(r'(?:n\.|#)\s*([0-9.,]+)\s*in', ps)
                     if m: bsr = int(m.group(1).replace('.', '').replace(',', ''))
                     is_self = any(x in ps for x in ["indipendentemente pubblicato", "independently published", "kdp"])
+
             roy = KDPBrain.calculate_royalty(price, pages, is_color)
             sales = KDPBrain.estimate_sales(bsr)
             results.append({
@@ -151,11 +164,14 @@ def scrape_books(mkt, keyword, pages, is_color):
                 "Vendite": sales, "Profitto": round(sales * roy, 2), "Self-Pub": "Sì" if is_self else "No"
             })
             p_bar.progress((i + 1) / len(items))
+        
         return pd.DataFrame(results)
-    except: return None
+    except Exception as e:
+        st.error(f"Errore API: {e}")
+        return None
 
 # ==============================================================================
-# 4. SIDEBAR: PERSONA LAB & ISTRUZIONI
+# 4. SIDEBAR: PERSONA & ISTRUZIONI
 # ==============================================================================
 if 'kw_active' not in st.session_state:
     st.session_state['kw_active'] = ""
@@ -163,28 +179,27 @@ if 'kw_active' not in st.session_state:
 with st.sidebar:
     st.title("🛡️ STRATEGY COMMAND")
     
-    with st.expander("📖 Istruzioni d'Uso"):
+    with st.expander("📖 Guida Rapida"):
         st.markdown("""
-        1. Inserisci i dati della **Persona**.
-        2. Genera o digita una **Keyword**.
-        3. Se lo Score è < 60, il sistema suggerirà **nuove vie d'uscita**.
+        1. Compila i dati della **Persona**.
+        2. Usa **🎯 Genera** o scegli dai **Suggerimenti**.
+        3. Imposta i parametri tecnici del libro.
+        4. Analizza. Se lo Score < 60, guarda i **Consigli di Salvataggio**.
         """)
 
     if st.button("🔄 NUOVA ANALISI", use_container_width=True):
-        st.session_state['kw_active'] = ""
-        st.rerun()
+        st.session_state['kw_active'] = ""; st.rerun()
 
     st.markdown("---")
     st.subheader("👤 Identikit Persona")
-    with st.expander("Definisci Lettore", expanded=True):
-        p_target = st.text_input("Chi è il lettore?", placeholder="es. Atleti")
-        p_pain = st.text_input("Qual è il suo dolore?", placeholder="es. dolori muscolari")
-        p_dream = st.text_input("Cosa desidera?", placeholder="es. recupero rapido")
+    p_target = st.text_input("Target", placeholder="es. Imprenditori")
+    p_pain = st.text_input("Problema", placeholder="es. burnout")
+    p_dream = st.text_input("Desiderio", placeholder="es. libertà di tempo")
     
     if p_pain and p_dream:
-        k_suggerita = f"{p_pain.capitalize()} per {p_target}: Soluzioni per {p_dream}"
-        if st.button(f"🎯 Genera: {k_suggerita}", use_container_width=True):
-            st.session_state['kw_active'] = k_suggerita
+        k_sug = f"{p_pain.capitalize()} per {p_target}: Guida al {p_dream}"
+        if st.button(f"🎯 Genera: {k_sug}", use_container_width=True):
+            st.session_state['kw_active'] = k_sug
             st.rerun()
 
     st.markdown("---")
@@ -196,8 +211,7 @@ with st.sidebar:
             suggs = KDPFreeTools.get_amazon_suggestions(query, mkt)
             for s in suggs:
                 if st.button(f"🔎 {s}", key=f"s_{s}", use_container_width=True):
-                    st.session_state['kw_active'] = s
-                    st.rerun()
+                    st.session_state['kw_active'] = s; st.rerun()
 
     st.markdown("---")
     pgs = st.number_input("Pagine", min_value=24, value=120)
@@ -205,7 +219,7 @@ with st.sidebar:
     run = st.button("LANCIA ANALISI", type="primary", use_container_width=True)
 
 # ==============================================================================
-# 5. MAIN DASHBOARD
+# 5. DASHBOARD PRINCIPALE
 # ==============================================================================
 if run and query:
     st.header(f"📊 Business Analysis: {query.upper()}")
@@ -216,8 +230,8 @@ if run and query:
     </div>
     """, unsafe_allow_html=True)
 
-    with st.spinner("Analisi in corso..."):
-        df = scrape_books(mkt, query, pgs, is_color)
+    with st.spinner("Analisi di mercato in corso (WebScraping.ai Residentials)..."):
+        df = scrape_books_ws(mkt, query, pgs, is_color)
         
         if df is not None and not df.empty:
             st.dataframe(df, column_config={"Copertina": st.column_config.ImageColumn("Cover")}, use_container_width=True, hide_index=True)
@@ -226,7 +240,6 @@ if run and query:
             avg_roy = df['Royalty_Val'].mean()
             self_ratio = (len(df[df["Self-Pub"] == "Sì"]) / len(df)) * 100
             
-            # Opportunity Score
             o_score = 40
             if avg_p > 13: o_score += 20
             if self_ratio > 45: o_score += 20
@@ -239,9 +252,8 @@ if run and query:
             c3.metric("Self-Pub Ratio", f"{int(self_ratio)}%")
             c4.metric("Opportunity Score", f"{o_score}/100")
 
-            # SEZIONE EDITORIALE O RECUPERO
-            st.markdown("---")
             if o_score >= 60:
+                st.markdown("---")
                 st.header("✍️ Proposta Editoriale Sbloccata")
                 titles, plot = KDPBrain.generate_editorial_proposal(p_target, p_pain, p_dream, query)
                 col_t, col_p = st.columns([1, 1.5])
@@ -253,31 +265,18 @@ if run and query:
                     st.subheader("📖 Bozza Trama")
                     st.markdown(f"<div class='editorial-card'><p class='plot-text'>{plot}</p></div>", unsafe_allow_html=True)
             else:
-                st.warning("⚠️ **Keyword non profittevole.** L'analisi dei dati suggerisce che questa nicchia è troppo satura o poco remunerativa.")
+                st.warning("⚠️ Nicchia non profittevole. Avvio strategie di recupero...")
                 st.header("🔄 Strategie di Recupero (Pivoting)")
-                st.info("Non perdere tempo qui. Prova queste keyword alternative basate sulla tua Persona:")
-                
-                # Generazione Keyword di Salvataggio
-                rescue_kws = [
-                    f"Workbook {query}",
-                    f"{p_pain.title()} per {p_target} principianti",
-                    f"Come {p_dream.lower()} in 30 giorni",
-                    f"Manuale pratico {p_target} {p_pain.lower()}"
-                ]
-                
-                res_col1, res_col2 = st.columns(2)
-                for i, r_kw in enumerate(rescue_kws):
-                    target_col = res_col1 if i % 2 == 0 else res_col2
-                    if target_col.button(f"🔍 Analizza invece: {r_kw}", key=f"rescue_{i}", use_container_width=True):
-                        st.session_state['kw_active'] = r_kw
-                        st.rerun()
-                
-                # Keyword alternative in viola
-                st.markdown("---")
-                st.subheader("💡 Altri suggerimenti strategici (Viola)")
-                ca1, ca2 = st.columns(2)
-                ca1.markdown(f"<div class='keyword-alt-card'><b>Focus Problema:</b><br>{p_target.title()} e {p_pain.lower()}</div>", unsafe_allow_html=True)
-                ca2.markdown(f"<div class='keyword-alt-card'><b>Focus Risultato:</b><br>Guida per {p_dream.lower()}</div>", unsafe_allow_html=True)
+                rescue_kws = [f"Workbook {query}", f"{p_pain.title()} per {p_target} principianti", f"Manuale {p_target} {p_pain.lower()}"]
+                rcol1, rcol2, rcol3 = st.columns(3)
+                for i, rk in enumerate(rescue_kws):
+                    if [rcol1, rcol2, rcol3][i].button(f"🔍 Prova: {rk}", key=f"res_{i}", use_container_width=True):
+                        st.session_state['kw_active'] = rk; st.rerun()
 
+            st.markdown("---")
+            st.subheader("💡 Keyword Alternative (Viola)")
+            ca1, ca2 = st.columns(2)
+            ca1.markdown(f"<div class='keyword-alt-card'><b>Focus Problema:</b><br>{p_target.title()} e {p_pain.lower()}</div>", unsafe_allow_html=True)
+            ca2.markdown(f"<div class='keyword-alt-card'><b>Focus Risultato:</b><br>Come ottenere {p_dream.lower()}</div>", unsafe_allow_html=True)
         else:
-            st.error("Errore Amazon. Riprova tra 60 secondi.")
+            st.error("Errore Amazon o API limitata. Controlla i crediti su WebScraping.ai.")
