@@ -41,10 +41,10 @@ st.markdown("""
             background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 20px; border-radius: 10px; color: black !important;
         }
         .ebook-card {
-            background-color: white; border: 2px solid #ffd700; padding: 20px; border-radius: 10px; margin-bottom: 15px; box-shadow: 2px 2px 10px rgba(0,0,0,0.1);
+            background-color: white; border: 2px solid #ffd700; padding: 25px; border-radius: 10px; margin-bottom: 20px; box-shadow: 2px 2px 12px rgba(0,0,0,0.1);
         }
-        .ebook-title { color: #856404 !important; font-weight: 900; font-size: 1.3rem; }
-        .ebook-plot { color: black !important; margin-top: 10px; }
+        .ebook-title { color: #856404 !important; font-weight: 900; font-size: 1.5rem; margin-bottom: 10px; }
+        .ebook-plot { color: #000000 !important; line-height: 1.6; font-size: 1.1rem; }
         
         /* METRICHE */
         [data-testid="stMetricValue"] { color: #238636 !important; font-weight: 800 !important; }
@@ -62,7 +62,7 @@ if 'score' not in st.session_state: st.session_state.score = 0
 if 'suggested_kws' not in st.session_state: st.session_state.suggested_kws = ""
 
 # ==============================================================================
-# 3. MOTORE DI SCRAPING (RISOLTO: AGGIUNTO BROWSER RENDERING)
+# 3. MOTORE DI SCRAPING (PARALLELO CON BSR ANALYST)
 # ==============================================================================
 def get_amazon_data(mkt, keyword):
     domains = {"Italia": "amazon.it", "USA": "amazon.com", "Spagna": "amazon.es", "Francia": "amazon.fr", "Germania": "amazon.de"}
@@ -71,7 +71,6 @@ def get_amazon_data(mkt, keyword):
     
     def fetch(p):
         url = f"https://www.{domain}/s?k={keyword.replace(' ', '+')}&i=stripbooks&page={p}"
-        # FIX: browser=true è essenziale per evitare "Nessun dato trovato"
         ant_url = f"https://api.scrapingant.com/v2/general?url={urllib.parse.quote(url)}&x-api-key={api_key}&browser=true&proxy_type=residential"
         try:
             r = requests.get(ant_url, timeout=30)
@@ -86,15 +85,15 @@ def get_amazon_data(mkt, keyword):
     for html in pages:
         if not html: continue
         soup = BeautifulSoup(html, 'html.parser')
-        # FIX: Selettore più ampio per catturare tutti i prodotti Kindle e Libri
-        items = soup.find_all('div', {'data-component-type': 's-search-result'}) or soup.select('div[data-asin]')
+        items = soup.find_all('div', {'data-component-type': 's-search-result'})
         
         for item in items:
-            title_el = item.h2 or item.select_one('.a-size-medium')
+            title_el = item.h2
             title = title_el.text.strip() if title_el else ""
             if not title or title in seen: continue
             
             text = item.get_text(separator=' ').lower()
+            # 3) ANALISI BSR
             bsr_match = re.search(r'n\.\s*([0-9.,]+)\s*in', text) or re.search(r'#([0-9.,]+)\s*in', text)
             bsr = bsr_match.group(1).replace('.', '').replace(',', '') if bsr_match else "N/D"
             
@@ -107,6 +106,7 @@ def get_amazon_data(mkt, keyword):
             
             if price > 0 or bsr != "N/D":
                 seen.add(title)
+                # 4) MOSTRA TITOLI ANALIZZATI (Sempre almeno 20)
                 results.append({"Titolo Analizzato": title, "Prezzo": price, "BSR": bsr, "Editore": is_self})
             
             if len(results) >= 50: break
@@ -114,7 +114,7 @@ def get_amazon_data(mkt, keyword):
     return pd.DataFrame(results)
 
 # ==============================================================================
-# 4. SIDEBAR (MODIFICHE RICHIESTE)
+# 4. SIDEBAR (GENERAZIONE KEYWORD & ANALISI)
 # ==============================================================================
 with st.sidebar:
     st.title("🛡️ STRATEGY LAB 11.1")
@@ -125,23 +125,25 @@ with st.sidebar:
         st.rerun()
     
     st.markdown("---")
+    # AGGIUNTO Test Prep
     genere = st.selectbox("Seleziona Genere", ["Saggio Scientifico", "Quiz Scientifico", "Manuale Tecnico", "Test Prep", "Religioso", "Spirituale", "Meditazione", "Business", "Romanzo Rosa", "Thriller", "Fantasy", "Fantascienza", "Psicologia", "Biografia", "Ricettario"])
     nicchia = st.text_input("Sotto-nicchia specifica")
     target = st.text_input("Target Lettore")
     
+    # 2) GENERAZIONE KEYWORD SPECIFICHE
     if st.button("🔍 GENERA KEYWORD SPECIFICHE"):
         if not nicchia or not target:
             st.error("Inserisci nicchia e target!")
         else:
             with st.spinner("Generazione..."):
                 client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                prompt_kw = f"Genera 5 keyword long-tail per KDP. Nicchia: {nicchia}, Genere: {genere}, Target: {target}. Separale con virgola."
+                prompt_kw = f"Genera 5 keyword long-tail specifiche per KDP. Nicchia: {nicchia}, Genere: {genere}, Target: {target}. Separale con virgola."
                 kw_ai = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt_kw}]).choices[0].message.content
                 st.session_state.suggested_kws = kw_ai
 
     if st.session_state.suggested_kws:
         st.info(f"Suggerite: {st.session_state.suggested_kws}")
-        kw_selezionata = st.text_input("Keyword da analizzare:", value=st.session_state.suggested_kws.split(',')[0].strip())
+        kw_selezionata = st.text_input("Keyword finale da analizzare:", value=st.session_state.suggested_kws.split(',')[0].strip())
         
         if st.button("🚀 ANALIZZA MERCATO", type="primary"):
             with st.spinner("Analisi parallela (Almeno 20 libri)..."):
@@ -156,24 +158,26 @@ with st.sidebar:
                     score = 40 + (30 if avg_p > 12.5 else 0) + (30 if indie_r > 40 else 0)
                     st.session_state.score = score
                     
+                    # 1) GENERAZIONE TITOLI E TRAME ADATTE ALLA STESURA
                     if score >= 60:
                         client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                        prompt_book = f"Analisi POSITIVA per '{kw_selezionata}'. Suggerisci 3 titoli e 3 trame per scrivere il libro. Formato: TITOLO: [testo] | TRAMA: [testo]"
+                        prompt_book = f"Analisi POSITIVA per la keyword '{kw_selezionata}'. Genera 3 titoli magnetici e 3 trame strutturate adatte alla stesura di un libro di successo in questa nicchia ({genere}). Formato: TITOLO: [testo] | TRAMA: [testo]"
                         sugg = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt_book}]).choices[0].message.content
                         st.session_state.suggestions = sugg
                     else:
                         st.session_state.suggestions = "NEGATIVE"
                 else:
-                    st.error("⚠️ Nessun dato trovato. Prova una keyword più generica o attendi 1 minuto.")
+                    st.error("⚠️ Nessun dato trovato. Prova una keyword meno specifica.")
 
 # ==============================================================================
-# 5. RISULTATI (HEADER BIANCO / CORPO NERO)
+# 5. RISULTATI (STAMPA TITOLI E TRAME)
 # ==============================================================================
 if st.session_state.data is not None:
     st.markdown(f"<div class='white-title'>Analisi per: {st.session_state.kw.upper()}</div>", unsafe_allow_html=True)
     
-    st.markdown("""<div class="explanation-box"><b>💡 Guida ai Dati:</b><br>• <b>BSR:</b> Ranking di vendita.<br>• <b>Indie Ratio:</b> Quota Self-Publisher.<br>• <b>Minimo 20 Libri:</b> Analisi garantita su vasta scala.</div>""", unsafe_allow_html=True)
+    st.markdown("""<div class="explanation-box"><b>💡 Guida ai Dati:</b><br>• <b>BSR:</b> Ranking di vendita attuale (minore è il numero, più vende).<br>• <b>Indie Ratio:</b> Possibilità di competizione per autori indipendenti.<br>• <b>Titoli:</b> Elenco dei libri analizzati (almeno 20).</div>""", unsafe_allow_html=True)
     
+    # Visualizzazione Tabella Dati (Titoli e BSR)
     st.dataframe(st.session_state.data, use_container_width=True, hide_index=True)
     
     c1, c2, c3 = st.columns(3)
@@ -182,12 +186,24 @@ if st.session_state.data is not None:
     c2.metric("Indie Ratio", f"{int(indie_p)}%")
     c3.metric("Score Nicchia", f"{st.session_state.score}/100")
 
+    # STAMPA TITOLI E TRAME IN CASO DI ANALISI POSITIVA
     if st.session_state.suggestions == "NEGATIVE":
-        st.warning("⚠️ Score basso (<60). Nicchia non consigliata.")
+        st.warning("⚠️ Score basso (<60). Nicchia satura o poco profittevole. Suggerimenti non generati.")
     elif st.session_state.suggestions:
-        st.success("✅ OTTIMA OPPORTUNITÀ! Ecco le idee per la stesura:")
+        st.success("✅ ANALISI POSITIVA! Ecco i titoli e le trame per la stesura del tuo libro:")
+        
+        # Split per riga e pulizia per catturare ogni blocco Titolo | Trama
         for item in st.session_state.suggestions.split("\n"):
-            if "|" in item:
+            if "|" in item and "TITOLO" in item.upper():
                 parts = item.split("|")
-                t, p = parts[0].replace('TITOLO:', '').strip(), parts[1].replace('TRAMA:', '').strip()
-                st.markdown(f'<div class="ebook-card"><div class="ebook-title">📘 {t}</div><div class="ebook-plot">{p}</div></div>', unsafe_allow_html=True)
+                # Estrazione sicura
+                title_text = parts[0].replace('TITOLO:', '').replace('Titolo:', '').strip()
+                plot_text = parts[1].replace('TRAMA:', '').replace('Trama:', '').strip()
+                
+                # Rendering della Card
+                st.markdown(f"""
+                <div class="ebook-card">
+                    <div class="ebook-title">📘 {title_text}</div>
+                    <div class="ebook-plot"><b>Sinossi per la stesura:</b> {plot_text}</div>
+                </div>
+                """, unsafe_allow_html=True)
