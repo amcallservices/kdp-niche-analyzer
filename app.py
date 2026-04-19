@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 # ==============================================================================
 # 1. DESIGN SYSTEM: CONTRASTO BIANCO/NERO & SIDEBAR FISSA
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 10.3", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 10.4", page_icon="🛡️", layout="wide")
 
 st.markdown("""
     <style>
@@ -25,11 +25,8 @@ st.markdown("""
         section[data-testid="stSidebar"] h1 { font-size: 1.8rem !important; color: white !important; }
 
         .white-header {
-            color: #ffffff !important;
-            font-size: 2.2rem !important;
-            font-weight: 800 !important;
-            margin: 25px 0px !important;
-            display: block;
+            color: #ffffff !important; font-size: 2.2rem !important; font-weight: 800 !important;
+            margin: 25px 0px !important; display: block;
         }
 
         [data-testid="stMetricLabel"] p { color: #000000 !important; font-weight: bold !important; font-size: 1.1rem !important; }
@@ -43,15 +40,14 @@ st.markdown("""
         .ebook-suggestion-card {
             background-color: #ffffff !important; border: 3px solid #ffd700 !important; 
             padding: 25px !important; border-radius: 15px !important; margin-bottom: 20px !important;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
-        .ebook-title { color: #856404 !important; font-size: 1.4rem !important; font-weight: 900 !important; display: block; margin-bottom: 8px; }
+        .ebook-title { color: #856404 !important; font-size: 1.4rem !important; font-weight: 900 !important; display: block; }
         .ebook-plot { color: #000000 !important; line-height: 1.6 !important; font-size: 1.1rem !important; font-weight: 500; }
         
+        /* FORZA NERO SUI CONTENUTI */
         .stMarkdown p, .stMarkdown li, .stMarkdown span, .stMarkdown div { color: #000000 !important; }
         .white-header, section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] label { color: white !important; }
         
-        /* BOX KEYWORD ATTIVA IN SIDEBAR */
         .kw-active-box {
             background-color: #238636; color: white !important; padding: 10px; border-radius: 5px; margin-top: 10px; font-weight: bold; text-align: center;
         }
@@ -59,7 +55,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 2. CONFIGURAZIONE API & MEMORIA PERSISTENTE
+# 2. API & PERSISTENZA (BUG FIX: INITIALIZATION)
 # ==============================================================================
 ANT_API_KEY = "5a93911a587c4aff8d8dc7f2af9ea0db"
 
@@ -67,17 +63,19 @@ try:
     client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
     API_READY = True
 except:
-    st.error("⚠️ OpenAI Key non trovata.")
+    st.error("⚠️ Configurazione OpenAI mancante.")
     API_READY = False
 
-if 'results_df' not in st.session_state: st.session_state.results_df = None
-if 'ebook_ideas' not in st.session_state: st.session_state.ebook_ideas = ""
-if 'score' not in st.session_state: st.session_state.score = 0
-if 'final_keyword' not in st.session_state: st.session_state.final_keyword = ""
-if 'kw_suggested' not in st.session_state: st.session_state.kw_suggested = None
+# Inizializziamo tutti i campi nel session_state per evitare che il bottone non risponda
+states = {
+    'results_df': None, 'ebook_ideas': "", 'score': 0, 
+    'final_keyword': "", 'kw_suggested': None, 'trigger_analysis': False
+}
+for key, val in states.items():
+    if key not in st.session_state: st.session_state[key] = val
 
 # ==============================================================================
-# 3. MOTORE PARALLELO TURBO (60+ LIBRI UNICI)
+# 3. MOTORE PARALLELO TURBO (60+ LIBRI)
 # ==============================================================================
 def fetch_page(url):
     api_url = f"https://api.scrapingant.com/v2/general?url={urllib.parse.quote(url)}&x-api-key={ANT_API_KEY}&browser=false&proxy_type=residential"
@@ -106,13 +104,12 @@ def run_deep_scan(mkt, keyword):
             raw_text = item.get_text(separator=' ').lower()
             if not any(x in raw_text for x in ['pagine', 'kindle', 'copertina', 'formato']): continue
             
-            # BSR
+            # BSR detection
             bsr = 0
             for p in [r'n\.\s*([0-9.,]+)\s*in', r'rank\s*#?\s*([0-9.,]+)', r'#([0-9.,]+)\s*in']:
                 m = re.search(p, raw_text)
                 if m: bsr = int(m.group(1).replace('.', '').replace(',', '')); break
             
-            # Prezzo
             p_w, p_f = item.find('span', 'a-price-whole'), item.find('span', 'a-price-fraction')
             price = float(f"{p_w.text.replace(',','').replace('.','')}.{p_f.text}") if p_w and p_f else 0.0
             
@@ -126,55 +123,70 @@ def run_deep_scan(mkt, keyword):
     return pd.DataFrame(results)
 
 # ==============================================================================
-# 4. SIDEBAR FISSA: COMMAND CENTER
+# 4. SIDEBAR FISSA (LOGICA DEI PULSANTI RIPARATA)
 # ==============================================================================
 with st.sidebar:
-    st.markdown("# 🛡️ STRATEGY LAB 10.3")
+    st.markdown("# 🛡️ STRATEGY LAB 10.4")
     if st.button("🔄 RESET TOTALE"):
-        for k in ['results_df', 'ebook_ideas', 'score', 'final_keyword', 'kw_suggested']: st.session_state[k] = None
+        st.session_state.clear()
         st.rerun()
 
     st.markdown("---")
     
-    # MOSTRA KEYWORD ATTIVA (SE PRESENTE)
     if st.session_state.final_keyword:
-        st.markdown(f"""<div class="kw-active-box">🎯 TARGET: {st.session_state.final_keyword.upper()}</div>""", unsafe_allow_html=True)
+        st.markdown(f'<div class="kw-active-box">🎯 TARGET: {st.session_state.final_keyword.upper()}</div>', unsafe_allow_html=True)
     
     p_type = st.selectbox("Genere / Formato", ["Saggio Scientifico", "Quiz Scientifico", "Manuale Tecnico", "Religioso / Teologico", "Spirituale / Esoterico", "Meditazione / Mindfulness", "Business e Marketing", "Romanzo Rosa", "Thriller / Noir", "Fantasy", "Fantascienza", "Manuale Psicologico", "Biografia", "Ricettario"])
     p_niche = st.text_input("Nicchia Specifica")
     p_target = st.text_input("Identikit Lettore")
     p_angle = st.text_area("Angolo di Attacco", height=80)
     
+    # PULSANTE 1: GENERAZIONE
     if st.button("🧠 GENERA KEYWORD AI", type="primary"):
-        p = f"Sei un SEO KDP. Genera UNA keyword LONG-TAIL per un {p_type}. Nicchia: {p_niche}. Target: {p_target}. Rispondi: KEYWORD: [testo]"
-        res = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": p}]).choices[0].message.content
-        st.session_state.kw_suggested = res.split("KEYWORD:")[1].strip()
+        if API_READY:
+            prompt = f"Sei un SEO KDP. Genera UNA keyword LONG-TAIL per un {p_type}. Nicchia: {p_niche}. Target: {p_target}. Rispondi: KEYWORD: [testo]"
+            res = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}]).choices[0].message.content
+            st.session_state.kw_suggested = res.split("KEYWORD:")[1].strip()
+            st.rerun()
 
     if st.session_state.kw_suggested:
         kw_input = st.text_input("Keyword finale:", value=st.session_state.kw_suggested)
         mkt = st.selectbox("Marketplace", ["Italia", "USA", "Spagna", "Francia", "Germania"])
         
+        # PULSANTE 2: ANALISI (Usa trigger per stabilità)
         if st.button("🚀 LANCIA DEEP SCAN (60 LIBRI)", use_container_width=True):
-            df = run_deep_scan(mkt, kw_input)
-            if not df.empty:
-                st.session_state.results_df = df
-                st.session_state.final_keyword = kw_input
-                avg_p = df['Prezzo'].mean()
-                indie_r = (len(df[df['Autore/Tipo'].str.contains("Sì")]) / len(df)) * 100
-                st.session_state.score = 40 + (30 if avg_p > 13.5 else 0) + (30 if indie_r > 40 else 0)
-                
-                if st.session_state.score >= 60:
-                    p_eb = f"Sei un Editor KDP. La keyword è '{kw_input}' e il genere è '{p_type}'. Genera 3 titoli e 3 trame perfettamente ATTINENTI sia alla keyword che al genere. Formato: [PROPOSTA_START] TITOLO: [testo] | TRAMA: [testo] [PROPOSTA_END]"
-                    st.session_state.ebook_ideas = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": p_eb}]).choices[0].message.content
-                else: st.session_state.ebook_ideas = "NEGATIVE"
+            st.session_state.trigger_analysis = True
+            st.session_state.active_kw = kw_input
+            st.session_state.active_mkt = mkt
+            st.rerun()
 
 # ==============================================================================
-# 5. DASHBOARD: VISUALIZZAZIONE PERSISTENTE
+# 5. ESECUZIONE ANALISI (Garantisce che il codice parta e resti)
+# ==============================================================================
+if st.session_state.trigger_analysis:
+    with st.spinner("⚡ Analisi parallela in corso..."):
+        df = run_deep_scan(st.session_state.active_mkt, st.session_state.active_kw)
+        if not df.empty:
+            st.session_state.results_df = df
+            st.session_state.final_keyword = st.session_state.active_kw
+            avg_p = df['Prezzo'].mean()
+            indie_r = (len(df[df['Autore/Tipo'].str.contains("Sì")]) / len(df)) * 100
+            st.session_state.score = 40 + (30 if avg_p > 13.5 else 0) + (30 if indie_r > 40 else 0)
+            
+            if st.session_state.score >= 60:
+                p_eb = f"Editor KDP. Keyword: '{st.session_state.active_kw}', Genere: '{p_type}'. Genera 3 titoli e 3 trame. Formato: [PROPOSTA_START] TITOLO: [testo] | TRAMA: [testo] [PROPOSTA_END]"
+                st.session_state.ebook_ideas = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": p_eb}]).choices[0].message.content
+            else: st.session_state.ebook_ideas = "NEGATIVE"
+        
+        st.session_state.trigger_analysis = False # Ferma il loop ma i dati restano nel session_state
+
+# ==============================================================================
+# 6. DASHBOARD: VISUALIZZAZIONE PERSISTENTE
 # ==============================================================================
 if st.session_state.results_df is not None:
     st.markdown(f"<div class='white-header'>📊 Report Mercato: {st.session_state.final_keyword.upper()}</div>", unsafe_allow_html=True)
     
-    st.markdown("""<div class="explanation-box"><b>📘 Manuale d'Analisi (Testo Nero):</b><br>• <b>BSR:</b> La classifica vendite. Più è basso, meglio è.<br>• <b>Indie Ratio:</b> Quota di Self-Publisher. Sopra il 40% è ottimo.<br>• <b>Score:</b> Semaforo verde sopra 60.</div>""", unsafe_allow_html=True)
+    st.markdown("""<div class="explanation-box"><b>📘 Manuale d'Analisi (Testo Nero):</b><br>• <b>BSR:</b> Classifica vendite. • <b>Indie Ratio:</b> Quota Self-Publisher. • <b>Score:</b> Semaforo verde > 60.</div>""", unsafe_allow_html=True)
     
     st.dataframe(st.session_state.results_df, use_container_width=True, hide_index=True)
     
