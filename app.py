@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 # ==============================================================================
 # 1. DESIGN SYSTEM: CONTRASTO BIANCO/NERO & RIMOZIONE MENU
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 11.4", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 11.5", page_icon="🛡️", layout="wide")
 
 st.markdown("""
     <style>
@@ -53,7 +53,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# TITOLO SEMPRE VISIBILE (MODIFICA RICHIESTA)
+# TITOLO SEMPRE VISIBILE
 st.markdown("<div class='program-title'>Analisi delle Nicchie Profittevoli</div>", unsafe_allow_html=True)
 
 # ==============================================================================
@@ -136,10 +136,10 @@ def get_amazon_data(mkt, keyword):
     return pd.DataFrame(results)
 
 # ==============================================================================
-# 4. SIDEBAR
+# 4. SIDEBAR CON PROMPT STRATEGICO POTENZIATO
 # ==============================================================================
 with st.sidebar:
-    st.title("🛡️ STRATEGY LAB 11.4")
+    st.title("🛡️ STRATEGY LAB 11.5")
     if st.button("🔄 RESET"):
         st.session_state.data = None
         st.session_state.suggestions = None
@@ -154,9 +154,15 @@ with st.sidebar:
     if st.button("🔍 GENERA KEYWORD CHIRURGICHE"):
         if not nicchia or not target: st.error("Inserisci nicchia e target!")
         else:
-            with st.spinner("Generazione..."):
+            with st.spinner("Applicando ragionamento strategico..."):
                 client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                prompt_kw = f"Genera 5 keyword long-tail CHIRURGICHE per KDP. Nicchia: {nicchia}, Genere: {genere}, Target: {target}. Rispondi solo con le keyword separate da virgola."
+                # MODIFICA: Utilizzo degli strumenti di ragionamento KDP professionali
+                prompt_kw = f"""Agisci come un analista KDP esperto utilizzando il framework di profittabilità. 
+                Obiettivo: Trovare 'Gaps' di mercato.
+                Dati: Nicchia: {nicchia}, Genere: {genere}, Target: {target}.
+                Compito: Genera 5 keyword long-tail CHIRURGICHE. 
+                Criteri: Alta intenzione d'acquisto, bassa saturazione, specifiche per risolvere un problema (pain point) o soddisfare un desiderio del target.
+                Rispondi solo con le 5 keyword separate da virgola."""
                 kw_ai = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt_kw}]).choices[0].message.content
                 st.session_state.suggested_kws = kw_ai
 
@@ -176,7 +182,13 @@ with st.sidebar:
                     
                     if st.session_state.score >= 60:
                         client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                        prompt_book = f"Analisi POSITIVA per '{kw_selezionata}' ({genere}). Genera 3 titoli e 3 trame specifici per questo argomento e per il target '{target}'. Formato: TITOLO: [testo] | TRAMA: [testo]."
+                        # MODIFICA: Prompt di ragionamento avanzato per la stesura
+                        prompt_book = f""" Framework Strategico KDP Positivo rilevato. 
+                        Keyword: '{kw_selezionata}' | Genere: {genere}.
+                        Compito: Genera 3 titoli e 3 trame basate su 'Profitability Formulas'.
+                        Criteri: I titoli devono includere ganci emotivi e benefici chiari. 
+                        Le trame devono descrivere come il libro si differenzia dalla competizione esistente analizzata.
+                        Formato: TITOLO: [testo] | TRAMA: [testo]."""
                         st.session_state.suggestions = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt_book}]).choices[0].message.content
                     else: st.session_state.suggestions = "NEGATIVE"
                 else: st.error("⚠️ Nessun dato trovato. Riprova.")
@@ -194,15 +206,14 @@ if st.session_state.data is not None:
     c2.metric("Indie Ratio", f"{int(indie_p)}%")
     c3.metric("Score Nicchia", f"{st.session_state.score}/100")
 
-    # LOGICA AVVISI E SUGGERIMENTI (MODIFICA RICHIESTA)
     if st.session_state.suggestions == "NEGATIVE":
-        st.error("❌ ANALISI NEGATIVA: Non è profittevole scrivere su quell'argomento. La competizione è troppo alta o la domanda è troppo bassa rispetto ai costi di produzione.")
+        st.error("❌ ANALISI NEGATIVA: In base ai criteri strategici, questa nicchia presenta troppi rischi (basso prezzo medio o alta presenza di Big Publishers). Sconsigliato procedere.")
     elif st.session_state.suggestions:
-        st.success(f"✅ ANALISI POSITIVA! Ecco i titoli e le trame per la stesura del tuo libro su '{st.session_state.kw}':")
+        st.success(f"✅ ANALISI POSITIVA! Strategia basata sul framework di profittabilità per '{st.session_state.kw}':")
         blocks = st.session_state.suggestions.split("TITOLO:")
         for block in blocks[1:]:
             if "|" in block:
                 parts = block.split("|")
                 title_final = parts[0].strip()
                 plot_final = parts[1].replace('TRAMA:', '').replace('Trama:', '').strip()
-                st.markdown(f'<div class="ebook-card"><div class="ebook-title">📘 {title_final}</div><div class="ebook-plot"><b>Strategia:</b> {plot_final}</div></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="ebook-card"><div class="ebook-title">📘 {title_final}</div><div class="ebook-plot"><b>Strategia Editoriale:</b> {plot_final}</div></div>', unsafe_allow_html=True)
