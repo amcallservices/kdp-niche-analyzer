@@ -7,11 +7,11 @@ import re
 import openai
 
 # ==============================================================================
-# 1. DESIGN SYSTEM ELITE (DARK MODE OPTIMIZED)
+# 1. DESIGN SYSTEM ELITE (DARK MODE & CATEGORICAL UI)
 # ==============================================================================
 st.set_page_config(
-    page_title="KDP OMNI-REASONER 3.0",
-    page_icon="🧠",
+    page_title="KDP OMNI-REASONER 3.1",
+    page_icon="📚",
     layout="wide",
     initial_sidebar_state="expanded" 
 )
@@ -27,7 +27,7 @@ st.markdown("""
             border-right: 1px solid #30363d;
         }
 
-        /* FIX COLORI METRICHE */
+        /* FIX COLORI METRICHE (Nero su Bianco per leggibilità) */
         [data-testid="stMetricValue"] { color: #1f2328 !important; font-weight: 800 !important; }
         [data-testid="stMetricLabel"] { color: #444c56 !important; }
         .stMetric { background-color: #ffffff !important; border-left: 8px solid #0969da !important; padding: 15px !important; border-radius: 12px !important; }
@@ -68,17 +68,17 @@ except Exception:
     API_READY = False
 
 # ==============================================================================
-# 3. CLASSE SURGICAL AI (RAGIONAMENTO INTEGRATO)
+# 3. CLASSE SURGICAL AI (RAGIONAMENTO INTEGRATO OMNIBUS)
 # ==============================================================================
 class SurgicalAI:
     @staticmethod
     def brainstorm_keyword(p_type, p_target, p_pain, p_dream):
-        """Genera una keyword analizzando la psiche del target."""
+        """Genera una keyword strategica specifica per Libri/Ebook."""
         prompt = f"""
-        Sei un esperto Senior di KDP Marketing. Diagnosi Persona:
+        Sei un esperto Senior di Amazon KDP Marketing. Diagnosi Persona:
         - FORMATO: {p_type} | TARGET: {p_target} | DOLORE: {p_pain} | SOGNO: {p_dream}
         COMPITO:
-        1. Crea una keyword Long Tail chirurgica ad alta conversione.
+        1. Crea una keyword Long Tail chirurgica ad alta conversione ESCLUSIVAMENTE per il settore Libri.
         2. Spiega la leva psicologica d'acquisto in 2 righe.
         RISPOSTA: KEYWORD: [testo] | LOGICA: [testo]
         """
@@ -87,65 +87,83 @@ class SurgicalAI:
 
     @staticmethod
     def executive_audit(df, query, p_target):
-        """Audit qualitativo basato sui titoli reali dei competitor."""
+        """Audit qualitativo basato sui titoli reali dei competitor editoriali."""
         titles = " | ".join(df['Titolo'].tolist()[:15])
         avg_price = df['Prezzo'].mean()
         prompt = f"""
-        Analizza 20 competitor Amazon per '{query}'. Prezzo Medio: {avg_price:.2f}€. 
+        Analizza 20 competitor Amazon Libri per '{query}'. Prezzo Medio: {avg_price:.2f}€. 
         Titoli trovati: {titles}.
-        Fornisci un Audit Chirurgico per il target '{p_target}': identifica i 'nervi scoperti' della concorrenza e perché il nostro libro vincerà.
+        Fornisci un Audit Chirurgico per il target '{p_target}': identifica perché questi libri vendono o dove falliscono.
         """
         response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}])
         return response.choices[0].message.content
 
     @staticmethod
     def genera_master_plan(p_type, p_target, p_pain, p_dream, kw):
-        """Genera 5 titoli e trame pronti alla pubblicazione."""
+        """Genera 5 titoli e trame pronti alla pubblicazione KDP."""
         prompt = f"""
-        Agisci come Editor-in-Chief. Crea 5 proposte editoriali per un libro '{p_type}' sulla keyword '{kw}'.
+        Agisci come Editor-in-Chief di una casa editrice. Crea 5 proposte editoriali (Libri fisici o Ebook) sulla keyword '{kw}'.
         Target: {p_target}. Dolore: {p_pain}. Sogno: {p_dream}.
         
         Per ogni opzione fornisci:
         1. TITOLO: Accattivante con trigger emotivo.
         2. ANGOLO DI MARKETING: La promessa unica del libro.
-        3. TRAMA DETTAGLIATA: Almeno 150 parole che descrivano la trasformazione del lettore e i punti chiave del contenuto.
-        
-        Formatta in modo che sia leggibile professionalmente.
+        3. TRAMA DETTAGLIATA: Almeno 180 parole che descrivano la struttura del libro e i benefici per il lettore.
         """
         response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}])
         return response.choices[0].message.content
 
     @staticmethod
     def genera_pivot(p_target, p_pain, p_dream, kw_fallita):
-        """Reindirizzamento se la nicchia è satura."""
-        prompt = f"La keyword '{kw_fallita}' per '{p_target}' è satura. Suggerisci 3 Keyword Pivot basate su dolore '{p_pain}' e sogno '{p_dream}' con spiegazione strategica."
+        """Reindirizzamento strategico se la nicchia è satura."""
+        prompt = f"La keyword editoriale '{kw_fallita}' per '{p_target}' è troppo competitiva. Suggerisci 3 Keyword Pivot basate su dolore '{p_pain}' e sogno '{p_dream}' specifiche per Libri/Ebook."
         response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}])
         return response.choices[0].message.content
 
 # ==============================================================================
-# 4. MOTORE DI SCRAPING (CATEGORICO 20 RISULTATI)
+# 4. MOTORE DI SCRAPING (CATEGORIZZAZIONE BLINDATA LIBRI)
 # ==============================================================================
 def run_strategic_scan(mkt, keyword, pages):
     domains = {"Italia": "amazon.it", "USA": "amazon.com", "Spagna": "amazon.es", "Francia": "amazon.fr", "Germania": "amazon.de"}
     domain = domains.get(mkt, "amazon.it")
+    # i=stripbooks forza Amazon nel dipartimento Libri
     target_url = f"https://www.{domain}/s?k={keyword.replace(' ', '+')}&i=stripbooks"
+    
     try:
         response = requests.get('https://api.webscraping.ai/html', params={'api_key': WS_API_KEY, 'url': target_url, 'proxy': 'residential'}, timeout=30)
         if response.status_code != 200: return None
         soup = BeautifulSoup(response.text, 'html.parser')
-        items = soup.find_all('div', {'data-component-type': 's-search-result'})[:20]
+        
+        # Analisi dei risultati (Scansione estesa a 20 libri)
+        items = soup.find_all('div', {'data-component-type': 's-search-result'})[:25]
         results = []
         for item in items:
+            # FILTRO CATEGORICO RIGIDO: Ignoriamo ciò che non ha metadati da libro
+            item_text = item.get_text().lower()
+            book_triggers = ['copertina', 'pagine', 'kindle', 'formato', 'paperback', 'hardcover', 'editor', 'editore', 'ebook', 'pagine', 'volumi']
+            if not any(x in item_text for x in book_triggers):
+                continue
+
             title = item.h2.text.strip() if item.h2 else "N/A"
             img = item.find('img', class_='s-image')['src'] if item.find('img', class_='s-image') else ""
             p_w = item.find('span', 'a-price-whole')
             p_f = item.find('span', 'a-price-fraction')
             price = float(f"{p_w.text.replace(',','').replace('.','')}.{p_f.text}") if p_w and p_f else 0.0
+            
             cost = 2.15 if pages <= 108 else 0.60 + (pages * 0.012)
             roy = round((price * 0.6) - cost, 2)
-            results.append({"Preview": img, "Titolo": title, "Prezzo": price, "Royalty": roy, "Self-Pub": "Sì" if "independently" in title.lower() or "pubblicato" in title.lower() else "No"})
+            
+            results.append({
+                "Preview": img, 
+                "Titolo": title, 
+                "Prezzo": price, 
+                "Royalty": roy, 
+                "Self-Pub": "Sì" if "independently" in item_text or "pubblicato" in item_text or "kdp" in item_text else "No"
+            })
+            if len(results) >= 20: break # Ci fermiamo a 20 libri puri
+            
         return pd.DataFrame(results)
-    except: return None
+    except Exception: return None
 
 # ==============================================================================
 # 5. SIDEBAR: INTELLIGENZA PREDITTIVA
@@ -154,19 +172,21 @@ if 'kw_active' not in st.session_state: st.session_state['kw_active'] = ""
 if 'ai_logic' not in st.session_state: st.session_state['ai_logic'] = ""
 
 with st.sidebar:
-    st.title("🛡️ KDP OMNI-REASONER 3.0")
+    st.title("🛡️ KDP OMNI-REASONER 3.1")
+    st.caption("Filtro Categorico Rigido: Libri & Ebook Attivo ✅")
+    
     if st.button("🔄 NUOVA SESSIONE", use_container_width=True):
         st.session_state['kw_active'] = ""; st.session_state['ai_logic'] = ""; st.rerun()
 
     st.markdown("---")
     st.subheader("👤 Analisi Predittiva Target")
-    p_type = st.selectbox("Formato", ["Manuale Pratico", "Workbook", "Diario Strategico", "Guida Passo-Passo"])
-    p_target = st.text_input("Target", placeholder="es. Imprenditori sopraffatti")
+    p_type = st.selectbox("Formato Editoriale", ["Manuale Pratico", "Workbook", "Diario Strategico", "Guida Passo-Passo"])
+    p_target = st.text_input("Target", placeholder="es. Manager sopraffatti")
     p_pain = st.text_input("Problema", placeholder="es. troppe decisioni al giorno")
     p_dream = st.text_input("Sogno", placeholder="es. focus laser e tempo libero")
     
     if st.button("🧠 GENERA STRATEGIA AI", use_container_width=True, type="primary") and API_READY:
-        with st.spinner("L'AI sta dissezionando il bisogno..."):
+        with st.spinner("Analisi clinica del mercato..."):
             res = SurgicalAI.brainstorm_keyword(p_type, p_target, p_pain, p_dream)
             if "KEYWORD:" in res:
                 st.session_state['kw_active'] = res.split("KEYWORD:")[1].split("|")[0].strip()
@@ -186,15 +206,15 @@ with st.sidebar:
 # 6. DASHBOARD: VERDETTO E REDAZIONE FINALE
 # ==============================================================================
 if run_btn and query and API_READY:
-    st.header(f"📊 Report Strategico: {query.upper()}")
+    st.header(f"📚 Report Strategico: {query.upper()}")
     
-    with st.spinner("Analisi di 20 competitor e Audit AI in corso..."):
+    with st.spinner("L'AI sta dissezionando 20 competitor editoriali..."):
         df = run_strategic_scan(mkt, query, pgs)
         
         if df is not None and not df.empty:
             # Audit Qualitativo GPT
             audit_res = SurgicalAI.executive_audit(df, query, p_target)
-            st.markdown(f'<div class="ai-audit-card"><b>🤖 AI EXECUTIVE AUDIT (Qualitativo):</b><br>{audit_res}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="ai-audit-card"><b>🤖 AI EXECUTIVE AUDIT (Analisi Qualitativa):</b><br>{audit_res}</div>', unsafe_allow_html=True)
 
             st.dataframe(df, column_config={"Preview": st.column_config.ImageColumn("Preview")}, use_container_width=True, hide_index=True)
             
@@ -212,8 +232,8 @@ if run_btn and query and API_READY:
 
             if o_score >= 60:
                 st.markdown("---")
-                st.header("✍️ Piano Editoriale di Pubblicazione")
-                with st.spinner("L'AI sta redigendo i titoli e le trame..."):
+                st.header("✍️ Master Plan di Pubblicazione (5 Opzioni)")
+                with st.spinner("L'AI sta redigendo trame dettagliate e SEO..."):
                     master_plan = SurgicalAI.genera_master_plan(p_type, p_target, p_pain, p_dream, query)
                     # Formattazione per rendere i titoli rossi e le trame leggibili
                     formatted_plan = (master_plan
@@ -228,8 +248,8 @@ if run_btn and query and API_READY:
             else:
                 st.markdown("---")
                 st.header("🔄 Reindirizzamento Strategico (AI Pivot)")
-                st.warning("⚠️ Score insufficiente. L'AI suggerisce di cambiare angolo di attacco:")
+                st.warning("⚠️ Score insufficiente. Lo Stratega AI ha elaborato queste alternative per Libri/Ebook:")
                 pivot_res = SurgicalAI.genera_pivot(p_target, p_pain, p_dream, query)
                 st.markdown(f'<div class="pivot-card">{pivot_res}</div>', unsafe_allow_html=True)
         else:
-            st.error("Errore Amazon. Riprova tra 60 secondi o controlla i crediti API.")
+            st.error("Nessun libro trovato per questa keyword nel dipartimento editoriale. Prova ad affinare la ricerca.")
