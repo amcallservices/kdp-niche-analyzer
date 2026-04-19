@@ -7,24 +7,54 @@ import re
 
 # 1. Configurazione Pagina
 st.set_page_config(
-    page_title="KDP Niche Analyzer Pro", 
-    page_icon="👑", 
+    page_title="KDP Niche Analyzer Ultimate", 
+    page_icon="💎", 
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# 2. CSS per bloccare la sidebar e stile
+# 2. CSS per UI Pulita
 st.markdown("""
     <style>
         [data-testid="collapsedControl"] { display: none; }
-        .stMetric { background-color: #f8f9fa; padding: 15px; border-radius: 10px; border-left: 5px solid #ff9900; }
+        .stMetric { background-color: #f8f9fa; padding: 15px; border-radius: 10px; border-left: 5px solid #1f77b4; box-shadow: 1px 1px 5px rgba(0,0,0,0.05); }
     </style>
 """, unsafe_allow_html=True)
 
-# LA TUA CHIAVE API SCRAPER
+# LA TUA CHIAVE API
 API_KEY = "ce57dc2330590954355f5c12171c7ce9"
 
-def get_amazon_data(marketplace, keyword):
+# --- FUNZIONI DI CALCOLO AVANZATE ---
+
+def stima_vendite_mensili(bsr):
+    """Stima le vendite mensili in base al BSR (Categoria Libri Amazon IT/US)"""
+    if bsr <= 0: return 0
+    if bsr <= 100: return 2000
+    if bsr <= 1000: return 500
+    if bsr <= 5000: return 150
+    if bsr <= 10000: return 80
+    if bsr <= 30000: return 30
+    if bsr <= 100000: return 10
+    if bsr <= 250000: return 3
+    return 0
+
+def calcola_royalty_netta(prezzo, pagine, colore):
+    """Calcola la royalty KDP sottraendo trattenute e costi di stampa"""
+    if prezzo <= 0: return 0.0
+    
+    # Costi di stampa approssimativi Amazon Europa
+    if colore == "Bianco e Nero":
+        costo_stampa = 2.15 if pagine <= 108 else 0.60 + (pagine * 0.012)
+    else: # Colori
+        costo_stampa = 0.60 + (pagine * 0.042)
+        if costo_stampa < 2.15: costo_stampa = 2.15
+        
+    royalty = (prezzo * 0.60) - costo_stampa
+    return round(royalty, 2) if royalty > 0 else 0.0
+
+# --- CORE SCRAPER ---
+
+def get_amazon_data(marketplace, keyword, pagine, colore):
     domains = {
         "Italia": "amazon.it", "USA": "amazon.com", "Spagna": "amazon.es", 
         "Francia": "amazon.fr", "Germania": "amazon.de"
@@ -50,7 +80,6 @@ def get_amazon_data(marketplace, keyword):
             title = item.h2.text.strip() if item.h2 else "N/A"
             text_block = item.get_text().lower()
             
-            # Estrazione Prezzo
             p_whole = item.find('span', 'a-price-whole')
             p_frac = item.find('span', 'a-price-fraction')
             price = 0.0
@@ -58,25 +87,31 @@ def get_amazon_data(marketplace, keyword):
                 try: price = float(f"{p_whole.text.replace(',','').replace('.','')}.{p_frac.text}")
                 except: price = 0.0
             
-            # Estrazione Recensioni
             rev_tag = item.find('span', {'class': 'a-size-base s-underline-text'})
             reviews = int(re.sub(r'\D', '', rev_tag.text)) if rev_tag else 0
             
-            # Estrazione BSR
             bsr = 0
             bsr_match = re.search(r'#([0-9.,]+) in', item.get_text())
             if bsr_match:
                 bsr = int(bsr_match.group(1).replace('.', '').replace(',', ''))
                 
-            # Rilevamento Self-Publishing (KDP)
             is_self_pub = "indipendentemente pubblicato" in text_block or "independently published" in text_block
+            
+            # Calcoli potenziati
+            vendite_stimate = stima_vendite_mensili(bsr)
+            royalty = calcola_royalty_netta(price, pagine, colore)
+            fatturato_mensile = vendite_stimate * price
+            utile_mensile = vendite_stimate * royalty
             
             results.append({
                 "Libro": title, 
-                "Prezzo": price, 
+                "Prezzo (€/$)": price, 
+                "Royalty Netta": f"{royalty} €",
                 "Recensioni": reviews, 
-                "BSR": bsr,
-                "Self-Published": "Sì" if is_self_pub else "Sconosciuto/Tradizionale"
+                "BSR": bsr if bsr > 0 else "N/D",
+                "Vendite/Mese": vendite_stimate,
+                "Utile/Mese Stimato": f"{round(utile_mensile, 2)} €",
+                "Self-Published": "Sì" if is_self_pub else "Sconosciuto"
             })
             
         return pd.DataFrame(results)
@@ -84,118 +119,121 @@ def get_amazon_data(marketplace, keyword):
         st.error(f"Errore: {e}")
         return None
 
-def calcola_opportunity_score(prezzo, recensioni, bsr):
-    """Calcola un punteggio da 0 a 100 sulla fattibilità della nicchia"""
-    score = 50 # Base di partenza
-    
-    # Valutazione Prezzo (Premiamo i margini alti)
-    if prezzo > 14.90: score += 20
+def calcola_opportunity_score(prezzo, recensioni, bsr, royalty):
+    score = 50 
+    if prezzo > 14.90: score += 15
     elif prezzo < 9.90: score -= 20
     
-    # Valutazione Concorrenza (Premiamo le recensioni basse)
     if 10 < recensioni < 150: score += 20
     elif recensioni > 1000: score -= 30
     
-    # Valutazione Domanda (Premiamo BSR tra 5k e 80k)
-    if 5000 < bsr < 80000: score += 20
+    if 100 < bsr < 50000: score += 20
     elif bsr > 300000: score -= 20
     
-    return max(0, min(100, score)) # Mantiene il punteggio tra 0 e 100
+    if royalty > 4.0: score += 15
+    elif royalty < 1.5: score -= 15
+    
+    return max(0, min(100, score))
 
 def analizza_strategia_pro(df, keyword, obiettivo):
     if df.empty: return
     
-    avg_price = df[df["Prezzo"] > 0]["Prezzo"].mean()
+    # Pulizia dati per i calcoli medi
+    df_calc = df.copy()
+    df_calc["Royalty Num"] = df_calc["Royalty Netta"].str.replace(' €', '').astype(float)
+    df_calc["Utile Num"] = df_calc["Utile/Mese Stimato"].str.replace(' €', '').astype(float)
+    
+    avg_price = df[df["Prezzo (€/$)"] > 0]["Prezzo (€/$)"].mean()
+    avg_royalty = df_calc["Royalty Num"].mean()
     avg_revs = df["Recensioni"].mean()
-    valid_bsrs = df[df["BSR"] > 0]["BSR"]
+    
+    valid_bsrs = df[df["BSR"] != "N/D"]["BSR"].astype(int)
     avg_bsr = valid_bsrs.mean() if not valid_bsrs.empty else 0
-    
-    # Calcolo Metriche Avanzate
-    self_pub_count = len(df[df["Self-Published"] == "Sì"])
-    self_pub_ratio = (self_pub_count / len(df)) * 100
-    opp_score = calcola_opportunity_score(avg_price, avg_revs, avg_bsr if avg_bsr > 0 else 150000)
+    tot_utile = df_calc["Utile Num"].sum()
 
-    st.header(f"📊 Report Professionale: {keyword.upper()}")
+    opp_score = calcola_opportunity_score(avg_price, avg_revs, avg_bsr if avg_bsr > 0 else 150000, avg_royalty)
+
+    st.header(f"📊 Report Professionale KDP: {keyword.upper()}")
     
-    # Box Metriche
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Prezzo Medio", f"{avg_price:.2f} €")
-    c2.metric("Media Recensioni", f"{int(avg_revs)}")
-    c3.metric("BSR Medio", f"{int(avg_bsr)}" if avg_bsr > 0 else "N/D")
+    c2.metric("Royalty Media", f"{avg_royalty:.2f} €")
+    c3.metric("Utile Nicchia (Top 16)", f"{int(tot_utile)} €/mese")
     c4.metric("Opportunity Score", f"{int(opp_score)}/100")
 
     st.markdown("---")
     
-    # 1. ANALISI COMPETITORS (Tradizionale vs KDP)
-    st.subheader("🕵️ Analisi dei Competitor")
-    if self_pub_ratio > 30:
-        st.success(f"✅ **Ecosistema KDP Favorevole:** Abbiamo rilevato un {int(self_pub_ratio)}% di libri chiaramente Self-Published in prima pagina. Questo significa che Amazon premia gli autori indipendenti in questa nicchia. Non c'è un monopolio delle grandi case editrici.")
-    else:
-        st.warning(f"⚠️ **Dominio Case Editrici:** Pochi o nessun libro self-published rilevato chiaramente in cima. Questa nicchia potrebbe essere dominata da autori famosi o case editrici tradizionali (es. Mondadori). Entrare qui richiede un brand forte.")
-
-    # 2. ANALISI BASATA SULL'OBIETTIVO
-    st.subheader(f"🎯 Strategia per: {obiettivo}")
+    # STRATEGIA
+    st.subheader(f"🎯 Strategia Operativa: {obiettivo}")
     
     if obiettivo == "Reddito Passivo (Royalty)":
         if opp_score >= 70:
-            st.success("**VERDETTO: NICCHIA VALIDATA.** I margini sono buoni (prezzi sopra i 10€) e la concorrenza è battibile. Procedi con la creazione: punta a una copertina superiore alla media e lancia con un prezzo di 12.90€-14.90€.")
-        elif avg_price < 10:
-            st.error("**PROBLEMA MARGINI:** Con prezzi medi così bassi, Amazon tratterrà gran parte dei guadagni per i costi di stampa. Per fare royalty qui, devi creare un **Bundle (3 in 1)** e venderlo ad almeno 17.90€.")
+            st.success(f"**🟢 SEMAFORO VERDE:** Nicchia eccellente. Il mercato muove circa {int(tot_utile)}€ netti al mese in prima pagina. Con un Opportunity Score di {int(opp_score)}, puoi entrare puntando a una royalty di almeno {avg_royalty:.2f}€ a copia.")
+        elif avg_royalty < 2.0:
+            st.error(f"**🔴 PROBLEMA MARGINI:** Anche vendendo, la royalty netta media è di soli {avg_royalty:.2f}€. Troppo bassa per assorbire i costi delle Ads. Soluzione: Aumenta il valore (aggiungi un audiolibro) e vendi a 15.90€+.")
         else:
-            st.warning("**COMPETIZIONE ALTA:** Le royalty potenziali ci sono, ma dovrai investire pesantemente in Amazon Ads per superare i leader attuali. Cerca una sotto-nicchia più specifica (es. aggiungendo 'per principianti').")
+            st.warning("**🟡 COMPETIZIONE ALTA:** C'è mercato, ma i leader sono forti. Usa la barra di ricerca Amazon per trovare una sotto-nicchia più lunga (es. aggiungi 'per principianti' o 'esercizi pratici').")
             
     elif obiettivo == "Lead Generation (Acquisire clienti)":
-        st.info("**VERDETTO LEAD GEN:** Poiché il tuo scopo è acquisire contatti (es. per vendere corsi o consulenze), il volume di vendita massivo è meno importante della qualità del lettore.")
-        if avg_bsr > 0 and avg_bsr < 200000:
-            st.success("✅ **C'è traffico sufficiente.** Inserisci un QR code o un link nelle prime pagine del libro (Lead Magnet) per catturare l'email dei lettori prima ancora che finiscano di leggere.")
+        if avg_bsr > 0 and avg_bsr < 100000:
+            st.success("✅ **C'è traffico organico.** La prima pagina sta generando vendite costanti. Inserisci un QR code (Lead Magnet) nelle prime 10 pagine del tuo libro per catturare email.")
         else:
-            st.warning("⚠️ **Poco Traffico:** I BSR sono molto alti. Rischia di essere un libro 'biglietto da visita' che dovrai promuovere tu esternamente (es. sui tuoi social), perché Amazon porterà poco traffico organico.")
+            st.warning("⚠️ **Traffico Freddo:** I volumi sono bassi. Questo libro non si venderà da solo: usalo come omaggio o promuovilo ai tuoi follower sui social.")
 
     elif obiettivo == "Costruzione Brand / Authority":
-        st.info("**VERDETTO AUTHORITY:** Se vuoi usare il libro per posizionarti come esperto, il prezzo deve riflettere il tuo valore.")
         if avg_price < 12:
-            st.success("✅ **Vantaggio Competitivo:** I concorrenti si svendono. Crea un libro Premium (Copertina Rigida, impaginazione curata) e vendilo a 19.90€. Verrai percepito immediatamente come l'esperto di fascia alta della nicchia.")
+            st.success("✅ **Vantaggio Competitivo:** I concorrenti si svendono. Crea un libro 'Premium' (Copertina Rigida, layout elegante) a 19.90€. Sembrerai subito l'esperto numero uno del settore.")
         else:
-            st.success("✅ **Mercato Educato:** Il pubblico è già abituato a pagare bene per queste informazioni. Crea un testo estremamente approfondito per ottenere recensioni a 5 stelle e dominare il settore.")
+            st.info("✅ **Mercato Educato:** Il pubblico spende volentieri per questo argomento. Assicurati che il contenuto sia impeccabile, il design farà il resto.")
 
 # --- UI SIDEBAR ---
 with st.sidebar:
-    st.title("🎯 KDP Expert Tool")
+    st.title("🎯 KDP Expert Ultimate")
     
-    if st.button("🔄 Nuova Ricerca", use_container_width=True):
+    if st.button("🔄 Pulisci e Riavvia", use_container_width=True):
         st.rerun()
     
     st.markdown("---")
-    
+    st.subheader("1. Setup Ricerca")
     mkt = st.selectbox("Marketplace", ["Italia", "USA", "Spagna", "Francia", "Germania"])
     key = st.text_input("Inserisci Keyword Strategica")
     
-    # NUOVO: Selezione Obiettivo
     st.markdown("---")
-    obiettivo = st.radio(
-        "Qual è il tuo obiettivo con questo libro?",
-        ["Reddito Passivo (Royalty)", "Lead Generation (Acquisire clienti)", "Costruzione Brand / Authority"],
-        help="L'intelligenza artificiale adatterà i consigli strategici in base a ciò che vuoi ottenere."
-    )
+    st.subheader("2. Dati Libro (Per Calcolo Royalty)")
+    pagine = st.number_input("Stima Pagine del tuo libro", min_value=24, max_value=800, value=120, step=10)
+    colore = st.selectbox("Interno", ["Bianco e Nero", "A Colori (Premium)"])
     
     st.markdown("---")
-    with st.expander("💡 Aiuto Ricerca Mirata"):
-        st.markdown("""
-        **Come trovare nicchie profittevoli:**
-        1. **Non usare parole singole**: Invece di 'Yoga', usa 'Yoga per anziani'.
-        2. **Risolvi un Dolore**: Le persone comprano per risolvere problemi.
-        3. **Verifica il prezzo**: Punta a nicchie dove si vende a 14.90€+.
-        4. **Opportunity Score**: Punta a un punteggio superiore a 60/100.
-        """)
+    st.subheader("3. Obiettivo")
+    obiettivo = st.radio(
+        "Scopo della pubblicazione:",
+        ["Reddito Passivo (Royalty)", "Lead Generation (Acquisire clienti)", "Costruzione Brand / Authority"]
+    )
         
-    run = st.button("AVVIA ANALISI", type="primary", use_container_width=True)
+    run = st.button("AVVIA ANALISI DEFINITIVA", type="primary", use_container_width=True)
 
 # --- LOGICA MAIN ---
 if run and key:
-    with st.spinner(f"Scansione e calcolo Opportunity Score in corso... (~15 sec)"):
-        df = get_amazon_data(mkt, key)
+    with st.spinner(f"Estrazione dati, stima vendite e calcolo royalty in corso... (~15 sec)"):
+        df = get_amazon_data(mkt, key, pagine, colore)
+        
         if df is not None and not df.empty:
+            st.success("Analisi completata con successo!")
+            
+            # Mostra tabella dati
             st.dataframe(df, use_container_width=True)
+            
+            # Bottone Download CSV
+            csv = df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Scarica Report in CSV (Excel)",
+                data=csv,
+                file_name=f"Analisi_KDP_{key.replace(' ', '_')}.csv",
+                mime="text/csv",
+            )
+            
+            st.markdown("---")
+            # Mostra analisi intelligente
             analizza_strategia_pro(df, key, obiettivo)
         else:
-            st.error("Dati non disponibili. Prova con una keyword più specifica o riprova tra poco.")
+            st.error("Dati non disponibili. Prova con una keyword più specifica o verifica la connessione API.")
