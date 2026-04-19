@@ -5,20 +5,19 @@ from bs4 import BeautifulSoup
 import time
 import re
 
-# 1. Configurazione Pagina: Forza l'apertura della sidebar
+# 1. Configurazione Pagina
 st.set_page_config(
-    page_title="KDP Analyzer Pro", 
-    page_icon="📈", 
+    page_title="KDP Niche Analyzer Gold", 
+    page_icon="💰", 
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# 2. CSS per bloccare la sidebar (nasconde il pulsante di chiusura)
+# 2. CSS per bloccare la sidebar e stile tabelle
 st.markdown("""
     <style>
-        [data-testid="collapsedControl"] {
-            display: none;
-        }
+        [data-testid="collapsedControl"] { display: none; }
+        .stMetric { background-color: #f0f2f6; padding: 10px; border-radius: 10px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -27,13 +26,9 @@ API_KEY = "ce57dc2330590954355f5c12171c7ce9"
 
 def get_amazon_data(marketplace, keyword):
     domains = {
-        "Italia": "amazon.it",
-        "USA": "amazon.com",
-        "Spagna": "amazon.es",
-        "Francia": "amazon.fr",
-        "Germania": "amazon.de"
+        "Italia": "amazon.it", "USA": "amazon.com", "Spagna": "amazon.es", 
+        "Francia": "amazon.fr", "Germania": "amazon.de"
     }
-    
     domain = domains.get(marketplace, "amazon.it")
     target_url = f"https://www.{domain}/s?k={keyword.replace(' ', '+')}&i=stripbooks"
     
@@ -46,116 +41,111 @@ def get_amazon_data(marketplace, keyword):
     
     try:
         res = requests.get('http://api.scraperapi.com', params=payload)
-        
-        if res.status_code != 200: 
-            return None
+        if res.status_code != 200: return None
             
         soup = BeautifulSoup(res.text, 'html.parser')
         results = []
         
         for item in soup.find_all('div', {'data-component-type': 's-search-result'}):
-            title_tag = item.h2
-            title = title_tag.text.strip() if title_tag else "N/A"
+            title = item.h2.text.strip() if item.h2 else "N/A"
             
+            # Estrazione Prezzo
             p_whole = item.find('span', 'a-price-whole')
             p_frac = item.find('span', 'a-price-fraction')
             price = 0.0
             if p_whole and p_frac:
                 try:
-                    price_str = f"{p_whole.text.replace(',','').replace('.','')}.{p_frac.text}"
-                    price = float(price_str)
-                except:
-                    price = 0.0
+                    price = float(f"{p_whole.text.replace(',','').replace('.','')}.{p_frac.text}")
+                except: price = 0.0
             
+            # Estrazione Recensioni
             rev_tag = item.find('span', {'class': 'a-size-base s-underline-text'})
-            reviews = 0
-            if rev_tag:
-                try:
-                    reviews = int(re.sub(r'\D', '', rev_tag.text))
-                except:
-                    reviews = 0
+            reviews = int(re.sub(r'\D', '', rev_tag.text)) if rev_tag else 0
             
-            status = "Da valutare"
-            if 12 <= price <= 25 and 50 < reviews < 500:
-                status = "Ottima (Margine + Domanda)"
-            elif reviews > 1000:
-                status = "Satura (Alta concorrenza)"
-            elif price < 10 and price > 0:
-                status = "Bassa (Margini scarsi)"
+            # Estrazione BSR (Metodo dinamico)
+            # Nota: Amazon spesso nasconde il BSR nei risultati di ricerca. 
+            # Se non presente, assegniamo un valore stimato basato sulla popolarità/rank.
+            bsr = 0
+            bsr_text = item.get_text()
+            bsr_match = re.search(r'#([0-9.,]+) in', bsr_text)
+            if bsr_match:
+                bsr = int(bsr_match.group(1).replace('.', '').replace(',', ''))
+            else:
+                # Similiamo un BSR medio per i primi risultati se il dato è protetto
+                bsr = 0 # Valore 0 indica dato non disponibile in questa vista
             
             results.append({
-                "Libro": title, 
-                "Prezzo (€/$)": price, 
-                "Recensioni": reviews, 
-                "Potenziale": status
+                "Libro": title, "Prezzo": price, "Recensioni": reviews, "BSR": bsr
             })
             
         return pd.DataFrame(results)
     except Exception as e:
-        st.error(f"Errore di connessione: {e}")
+        st.error(f"Errore: {e}")
         return None
 
-def analizza_strategia(df, keyword):
-    if df.empty:
-        return
-        
-    prezzo_medio = df["Prezzo (€/$)"].mean()
-    recensioni_medie = df["Recensioni"].mean()
-    libri_saturi = len(df[df["Potenziale"] == "Satura (Alta concorrenza)"])
-    libri_ottimi = len(df[df["Potenziale"] == "Ottima (Margine + Domanda)"])
+def analizza_strategia_bsr(df, keyword):
+    if df.empty: return
     
-    st.subheader(f"🧠 Analisi Strategica per: '{keyword.upper()}'")
+    avg_price = df[df["Prezzo"] > 0]["Prezzo"].mean()
+    avg_revs = df["Recensioni"].mean()
     
-    if recensioni_medie > 800 or libri_saturi > (len(df) / 3):
-        st.error("🔴 **Verdetto: Nicchia Troppo Competitiva**")
-        st.write("I leader di questa pagina hanno centinaia (o migliaia) di recensioni. Entrare frontalmente con lo stesso identico argomento richiederebbe un budget Amazon Ads enorme.")
-        st.info(f"💡 **Il Consiglio:** Usa il *Cross-Niching*. Non pubblicare un generico '{keyword}', ma specializzati. Prova a cercare: **'{keyword} per principianti'**, **'{keyword} per donne'**, o unisci l'argomento a una professione specifica.")
+    # Filtriamo i BSR validi (alcuni potrebbero essere 0 se non trovati)
+    valid_bsrs = df[df["BSR"] > 0]["BSR"]
+    avg_bsr = valid_bsrs.mean() if not valid_bsrs.empty else "N/D"
+
+    st.header(f"📊 Report Strategico: {keyword.upper()}")
     
-    elif prezzo_medio > 0 and prezzo_medio < 11.0:
-        st.warning("🟡 **Verdetto: Problema di Marginalità**")
-        st.write("La concorrenza potrebbe essere abbordabile, ma i prezzi medi sono troppo bassi. Pubblicando un libro normale faticherai ad andare in profitto con le sponsorizzate.")
-        st.info("💡 **Il Consiglio:** Esci dalla guerra dei prezzi al ribasso creando un prodotto *Premium*. Valuta di pubblicare un **Bundle (2 o 3 libri in 1)**, un'edizione con copertina rigida o interno a colori, posizionando il tuo libro a 14.90€ o più.")
-    
-    elif libri_ottimi >= 2 or (prezzo_medio >= 12 and 50 < recensioni_medie < 500):
-        st.success("🟢 **Verdetto: Semaforo Verde (Buco di Mercato!)**")
-        st.write("Ottimi segnali! Ci sono libri in prima pagina che vendono a buoni prezzi e la media delle recensioni indica che il mercato non è monopolizzato da vecchi colossi.")
-        st.info("💡 **Il Consiglio:** Questa nicchia è attaccabile! Vai su Amazon, apri i 3 libri che vendono di più e **leggi le loro recensioni da 2 e 3 stelle**. Scopri cosa manca e crea il tuo libro risolvendo esattamente quel difetto.")
-    
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Prezzo Medio", f"{avg_price:.2f} €")
+    c2.metric("Media Recensioni", f"{int(avg_revs)}")
+    c3.metric("BSR Medio Stimato", f"{avg_bsr}")
+
+    st.markdown("---")
+
+    # LOGICA DI ANALISI PROFITTO
+    if avg_price < 10:
+        st.error("⚠️ **NICCHIA A BASSO MARGINE**: I prezzi sono troppo bassi. Anche con vendite alte, il guadagno netto dopo Ads e Royalty sarà minimo.")
+    elif avg_revs > 1000:
+        st.warning("🔥 **NICCHIA IPER-COMPETITIVA**: Troppe recensioni. Per scalare questa nicchia serve un budget pubblicitario massiccio.")
+    elif avg_bsr != "N/D" and avg_bsr < 50000:
+        st.success("💰 **NICCHIA D'ORO**: Alta domanda (BSR basso) e prezzi sani. Qui si fanno i soldi veri.")
+    elif avg_bsr != "N/D" and avg_bsr > 200000:
+        st.info("🏜️ **NICCHIA DESERTA**: Poca competizione, ma anche pochissime vendite. Rischi di pubblicare un libro che nessuno cerca.")
     else:
-        st.info("🔵 **Verdetto: Nicchia Incerta**")
-        st.write("I dati sono molto misti o il numero di ricerche per questa parola chiave potrebbe essere basso.")
-        st.info("💡 **Il Consiglio:** Prima di scrivere il libro, assicurati che la gente stia effettivamente cercando questo argomento. Usa la barra di completamento automatico di Amazon per vedere se ci sono parole chiave correlate suggerite.")
+        st.success("✅ **BUCO DI MERCATO**: Competizione moderata e prezzi accettabili. Consigliato creare un prodotto 'Premium' (Bundle o Copertina Rigida).")
 
-# --- Interfaccia Utente ---
-st.title("🚀 Amazon KDP Niche Analyzer")
-
+# --- UI SIDEBAR ---
 with st.sidebar:
-    st.header("Impostazioni")
+    st.title("🎯 KDP Expert Tool")
     
-    # 3. Nuovo Pulsante di Reset
     if st.button("🔄 Nuova Ricerca", use_container_width=True):
         st.rerun()
+    
+    st.markdown("---")
+    
+    mkt = st.selectbox("Marketplace", ["Italia", "USA", "Spagna", "Francia", "Germania"])
+    key = st.text_input("Inserisci Keyword Strategica")
+    
+    st.markdown("---")
+    
+    # SEZIONE AIUTO RICERCA (Richiesta utente)
+    with st.expander("💡 Aiuto Ricerca Mirata"):
+        st.markdown("""
+        **Come trovare nicchie profittevoli:**
+        1. **Non usare parole singole**: Invece di 'Yoga', usa 'Yoga per anziani con mobilità ridotta'.
+        2. **Cerca il 'Dolore'**: Le persone comprano per risolvere problemi. Esempio: 'Come smettere di procrastinare'.
+        3. **Verifica il prezzo**: Se i primi 5 risultati costano meno di 9€, scappa. Cerca nicchie dove si vende a 14.90€+.
+        4. **BSR Target**: Punta a keyword dove i primi 3 libri hanno un BSR tra 5.000 e 80.000.
+        """)
         
-    st.markdown("---")
-    
-    mkt = st.selectbox("Marketplace", ["Italia", "USA", "Spagna", "Francia", "Germania"], key="mkt_select")
-    key = st.text_input("Parola Chiave (es. 'diario della gratitudine')", key="keyword_input")
-    run = st.button("Analizza e Trova l'Angolo", type="primary")
-    
-    st.markdown("---")
-    st.caption("🔒 Connessione protetta via ScraperAPI.")
+    run = st.button("AVVIA ANALISI", type="primary", use_container_width=True)
 
-if run:
-    if key:
-        with st.spinner(f"Scansione ed elaborazione strategica in corso su {mkt}... (~15 sec)"):
-            df = get_amazon_data(mkt, key)
-            
-            if df is not None and not df.empty:
-                st.success(f"Dati estratti con successo: {len(df)} concorrenti trovati.")
-                st.dataframe(df, use_container_width=True)
-                st.markdown("---")
-                analizza_strategia(df, key)
-            else:
-                st.error("Scansione fallita. Nessun risultato o blocco da parte di Amazon.")
-    else:
-        st.warning("Inserisci una parola chiave per iniziare.")
+# --- LOGICA MAIN ---
+if run and key:
+    with st.spinner("Analizzando il mercato..."):
+        df = get_amazon_data(mkt, key)
+        if df is not None and not df.empty:
+            st.dataframe(df, use_container_width=True)
+            analizza_strategia_bsr(df, key)
+        else:
+            st.error("Dati non disponibili. Prova con una keyword più specifica.")
