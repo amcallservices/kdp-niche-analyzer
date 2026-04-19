@@ -7,11 +7,11 @@ import re
 import openai
 
 # ==============================================================================
-# 1. DESIGN SYSTEM ELITE (ULTRA DARK & TRIPLE COMPARISON)
+# 1. DESIGN SYSTEM ELITE (MASTER DARK & DATA-DRIVEN)
 # ==============================================================================
 st.set_page_config(
-    page_title="KDP OMNI-REASONER 5.0",
-    page_icon="⚔️",
+    page_title="KDP OMNI-REASONER 5.1",
+    page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded" 
 )
@@ -28,18 +28,17 @@ st.markdown("""
         }
 
         /* FIX METRICHE */
-        [data-testid="stMetricValue"] { color: #1f2328 !important; font-weight: 800 !important; font-size: 1.8rem !important; }
-        [data-testid="stMetricLabel"] { color: #444c56 !important; }
-        .stMetric { background-color: #ffffff !important; border-left: 8px solid #0969da !important; padding: 15px !important; border-radius: 12px !important; }
+        [data-testid="stMetricValue"] { color: #1f2328 !important; font-weight: 800 !important; font-size: 1.5rem !important; }
+        .stMetric { background-color: #ffffff !important; border-left: 8px solid #0969da !important; padding: 10px !important; border-radius: 10px !important; }
 
         /* WINNER BANNER */
         .winner-box {
-            background-color: #238636; color: white; padding: 20px; border-radius: 12px;
-            text-align: center; font-weight: 900; font-size: 1.5rem; margin-bottom: 30px;
-            border: 2px solid #2ea043; box-shadow: 0 0 20px rgba(35, 134, 54, 0.4);
+            background-color: #238636; color: white; padding: 25px; border-radius: 12px;
+            text-align: center; font-weight: 900; font-size: 1.8rem; margin: 30px 0;
+            border: 3px solid #2ea043; box-shadow: 0 0 25px rgba(35, 134, 54, 0.5);
         }
 
-        /* PIANO EDITORIALE - HIGH CONTRAST DARK */
+        /* PIANO EDITORIALE - HIGH CONTRAST */
         .editorial-container {
             background-color: #0d1117; 
             border: 2px solid #30363d; 
@@ -78,10 +77,9 @@ class SurgicalAI:
     @staticmethod
     def brainstorm_3_keywords(p_type, p_target, p_pain, p_dream):
         prompt = f"""
-        Sei un Direttore Marketing KDP. Genera 3 diverse Keyword Long-Tail per un '{p_type}' rivolto a '{p_target}'.
+        Direttore Marketing KDP. Genera 3 diverse Keyword Long-Tail per '{p_type}' rivolto a '{p_target}'.
         Problema: {p_pain} | Sogno: {p_dream}.
-        REQUISITO: Restituisci SOLO le 3 keyword separate dal simbolo '||'. Senza numeri né introduzioni.
-        Esempio: Keyword1 || Keyword2 || Keyword3
+        Restituisci SOLO le 3 keyword separate da '||'. Esempio: Key1 || Key2 || Key3
         """
         response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}])
         return response.choices[0].message.content
@@ -89,116 +87,142 @@ class SurgicalAI:
     @staticmethod
     def genera_master_plan(p_type, p_target, p_pain, p_dream, kw):
         prompt = f"""
-        Genera 5 proposte editoriali (Libri/Ebook) sulla keyword vincitrice: '{kw}'.
+        Genera 5 proposte editoriali su: '{kw}'.
         Genere: {p_type} | Target: {p_target} | Problema: {p_pain} | Sogno: {p_dream}.
-        Per ogni opzione: 1. TITOLO | 2. ANGOLO DI MARKETING | 3. TRAMA DETTAGLIATA (Almeno 200 parole).
+        Per ogni opzione: TITOLO | ANGOLO DI MARKETING | TRAMA DETTAGLIATA (Almeno 200 parole).
         """
         response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}])
         return response.choices[0].message.content
 
 # ==============================================================================
-# 4. DEEP SCAN ENGINE (50 LIBRI)
+# 4. DEEP SCAN ENGINE (ULTRA-DATA)
 # ==============================================================================
-def run_deep_scan(mkt, keyword, pages_count=120):
+def run_ultra_scan(mkt, keyword, pages_count=120):
     domains = {"Italia": "amazon.it", "USA": "amazon.com", "Spagna": "amazon.es", "Francia": "amazon.fr", "Germania": "amazon.de"}
     domain = domains.get(mkt, "amazon.it")
     results = []
     
-    for page_num in range(1, 4): # Ottimizzato per velocità su 3 scan
-        if len(results) >= 40: break
+    # Scansioniamo fino a 3 pagine per ottenere dati solidi
+    for page_num in range(1, 4):
         target_url = f"https://www.{domain}/s?k={keyword.replace(' ', '+')}&i=stripbooks&page={page_num}"
         try:
-            response = requests.get('https://api.webscraping.ai/html', params={'api_key': WS_API_KEY, 'url': target_url, 'proxy': 'residential'}, timeout=25)
+            response = requests.get('https://api.webscraping.ai/html', params={'api_key': WS_API_KEY, 'url': target_url, 'proxy': 'residential'}, timeout=30)
             if response.status_code != 200: continue
             soup = BeautifulSoup(response.text, 'html.parser')
             items = soup.find_all('div', {'data-component-type': 's-search-result'})
+            
             for item in items:
                 item_text = item.get_text().lower()
-                book_triggers = ['copertina', 'pagine', 'kindle', 'formato', 'paperback', 'hardcover', 'editor', 'editore', 'ebook', 'volumi']
-                if not any(x in item_text for x in book_triggers): continue
+                # Filtro Libri
+                if not any(x in item_text for x in ['pagine', 'kindle', 'copertina', 'formato']): continue
 
+                title = item.h2.text.strip() if item.h2 else "N/A"
+                img = item.find('img', class_='s-image')['src'] if item.find('img', class_='s-image') else ""
+                
                 p_w = item.find('span', 'a-price-whole')
                 p_f = item.find('span', 'a-price-fraction')
                 price = float(f"{p_w.text.replace(',','').replace('.','')}.{p_f.text}") if p_w and p_f else 0.0
                 
-                title = item.h2.text.strip() if item.h2 else "N/A"
+                # Estrazione BSR (Metodo Rapido da anteprima se presente o Mock)
+                bsr_match = re.search(r'n\.\s*([0-9.,]+)\s*in', item_text)
+                bsr = int(bsr_match.group(1).replace('.', '').replace(',', '')) if bsr_match else 0
+                
+                cost = 2.15 if pages_count <= 108 else 0.60 + (pages_count * 0.012)
+                roy = round((price * 0.6) - cost, 2)
+                
                 results.append({
-                    "Titolo": title, "Prezzo": price, 
-                    "Self": 1 if "independently" in item_text or "pubblicato" in item_text else 0
+                    "Preview": img,
+                    "Titolo": title[:80] + "...",
+                    "Prezzo": price,
+                    "Royalty": roy,
+                    "BSR": bsr if bsr > 0 else "N/D",
+                    "Self": "Sì" if "independently" in item_text or "pubblicato" in item_text else "No"
                 })
                 if len(results) >= 40: break
         except: break
     return pd.DataFrame(results)
 
 # ==============================================================================
-# 5. SIDEBAR: LABORATORIO DI IDEAZIONE COMPARATIVA
+# 5. SIDEBAR: LABORATORIO DI IDEAZIONE
 # ==============================================================================
-if 'kws' not in st.session_state: st.session_state['kws'] = []
+if 'kws_battle' not in st.session_state: st.session_state['kws_battle'] = []
 
 with st.sidebar:
     st.title("⚔️ KDP NICHE BATTLE")
-    st.info("L'AI analizzerà 3 strade diverse per la tua idea.")
+    st.info("Configura il tuo progetto per iniziare la competizione tra nicchie.")
     
     p_type = st.selectbox("Genere", ["Manuale Tecnico", "Saggio Scientifico", "Business e Marketing", "Romanzo Rosa", "Thriller / Noir", "Fantasy", "Fantascienza", "Manuale Psicologico", "Biografia", "Ricettario", "Spirituale / Esoterico"])
-    p_target = st.text_input("Target", placeholder="es. Architetti")
-    p_pain = st.text_input("Dolore", placeholder="es. burnout")
-    p_dream = st.text_input("Sogno", placeholder="es. produttività calma")
+    p_target = st.text_input("Target", placeholder="es. Architetti junior")
+    p_pain = st.text_input("Dolore", placeholder="es. burnout da disegno")
+    p_dream = st.text_input("Sogno", placeholder="es. progettazione Zen")
     
     if st.button("🧠 GENERA 3 STRATEGIE", use_container_width=True, type="primary") and API_READY:
         res = SurgicalAI.brainstorm_3_keywords(p_type, p_target, p_pain, p_dream)
-        st.session_state['kws'] = [k.strip() for k in res.split("||")]
+        st.session_state['kws_battle'] = [k.strip() for k in res.split("||")]
 
-    if st.session_state['kws']:
-        st.markdown("### Keyword Identificate:")
-        for i, k in enumerate(st.session_state['kws']):
-            st.markdown(f'<div class="keyword-card"><b>OPZIONE {i+1}:</b><br>{k}</div>', unsafe_allow_html=True)
+    if st.session_state['kws_battle']:
+        st.markdown("### Keyword in Gara:")
+        for i, k in enumerate(st.session_state['kws_battle']):
+            st.markdown(f'<div class="keyword-card"><b>{i+1}:</b> {k}</div>', unsafe_allow_html=True)
 
     mkt = st.selectbox("Marketplace", ["Italia", "USA", "Spagna", "Francia", "Germania"])
-    run_all = st.button("🚀 LANCIA ANALISI COMPARATIVA", use_container_width=True)
+    run_battle = st.button("🚀 LANCIA BATTAGLIA DATI", use_container_width=True)
 
 # ==============================================================================
-# 6. DASHBOARD: LA BATTAGLIA DELLE NICCHIE
+# 6. DASHBOARD: ANALISI COMPARATIVA & LISTA LIBRI
 # ==============================================================================
-if run_all and st.session_state['kws'] and API_READY:
-    st.header("🏁 Risultati della Comparazione Strategica")
+if run_battle and st.session_state['kws_battle'] and API_READY:
+    st.header("🏁 Analisi Comparativa delle Nicchie")
     
-    final_results = []
-    cols = st.columns(3)
     
-    for i, kw in enumerate(st.session_state['kws']):
+    battle_data = {}
+    cols = st.columns(len(st.session_state['kws_battle']))
+    
+    for i, kw in enumerate(st.session_state['kws_battle']):
         with cols[i]:
             st.subheader(f"Opzione {i+1}")
-            st.caption(kw)
-            with st.spinner(f"Analisi {kw}..."):
-                df = run_deep_scan(mkt, kw)
+            st.caption(f"🔍 {kw}")
+            with st.spinner(f"Scansione..."):
+                df = run_ultra_scan(mkt, kw)
                 if not df.empty:
+                    # Metriche
                     avg_p = df['Prezzo'].mean()
-                    self_ratio = (df['Self'].sum() / len(df)) * 100
+                    self_ratio = (len(df[df['Self'] == "Sì"]) / len(df)) * 100
+                    bsr_list = [b for b in df['BSR'] if isinstance(b, int)]
+                    avg_bsr = sum(bsr_list) / len(bsr_list) if bsr_list else "N/D"
+                    
                     o_score = 40
                     if avg_p > 13.50: o_score += 30
-                    if self_ratio > 40: o_score += 30
+                    if self_ratio > 45: o_score += 30
                     
                     st.metric("Score", f"{o_score}/100")
-                    st.metric("Prezzo Medio", f"{avg_p:.2f} €")
+                    st.metric("Prezzo Med.", f"{avg_p:.2f} €")
                     st.metric("Indie Ratio", f"{int(self_ratio)}%")
+                    st.metric("BSR Medio", f"{int(avg_bsr) if isinstance(avg_bsr, float) else avg_bsr}")
                     
-                    final_results.append({"kw": kw, "score": o_score, "price": avg_p, "self": self_ratio})
+                    battle_data[kw] = {"score": o_score, "df": df}
+                    
+                    with st.expander("Vedi Libri Analizzati"):
+                        st.dataframe(
+                            df, 
+                            column_config={"Preview": st.column_config.ImageColumn("Cover")},
+                            hide_index=True,
+                            use_container_width=True
+                        )
                 else:
                     st.error("Nessun dato.")
-                    final_results.append({"kw": kw, "score": 0, "price": 0, "self": 0})
+                    battle_data[kw] = {"score": 0, "df": None}
 
-    # CALCOLO VINCITORE
-    if final_results:
-        winner = max(final_results, key=lambda x: x['score'])
+    # PROCLAMAZIONE VINCITORE & PIANO EDITORIALE
+    if battle_data:
+        winner_kw = max(battle_data, key=lambda k: battle_data[k]['score'])
+        winner_score = battle_data[winner_kw]['score']
         
-        st.markdown("---")
-        st.markdown(f'<div class="winner-box">🏆 VINCITORE: {winner["kw"].upper()}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="winner-box">🏆 VINCITORE: {winner_kw.upper()}</div>', unsafe_allow_html=True)
         
-        if winner['score'] >= 60:
-            with st.spinner("Redazione Master Plan per la nicchia vincente..."):
-                plan = SurgicalAI.genera_master_plan(p_type, p_target, p_pain, p_dream, winner['kw'])
-                
-                # FORMATTAZIONE HIGH CONTRAST
+        if winner_score >= 60:
+            with st.spinner("Generazione Master Plan..."):
+                plan = SurgicalAI.genera_master_plan(p_type, p_target, p_pain, p_dream, winner_kw)
                 formatted_plan = (plan
                     .replace("TITOLO:", " <span class='title-option'>")
                     .replace("ANGOLO DI MARKETING:", "</span> <span class='marketing-angle'>")
@@ -209,4 +233,4 @@ if run_all and st.session_state['kws'] and API_READY:
                 )
                 st.markdown(f'<div class="editorial-container">{formatted_plan}</div> </div>', unsafe_allow_html=True)
         else:
-            st.warning("⚠️ Nessuna delle nicchie analizzate ha superato lo score di 60. L'investimento è considerato ad alto rischio.")
+            st.warning("⚠️ Score insufficiente per sbloccare il Piano Editoriale automatico.")
