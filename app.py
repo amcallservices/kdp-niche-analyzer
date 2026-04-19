@@ -11,12 +11,13 @@ import urllib.parse
 # 1. CONFIGURAZIONE SUITE ELITE & UI (SIDEBAR DARK E FISSA)
 # ==============================================================================
 st.set_page_config(
-    page_title="KDP NICHE, PERSONA & EDITORIAL ANALYZER",
+    page_title="KDP NICHE & PERSONA VALIDATOR",
     page_icon="👤",
     layout="wide",
     initial_sidebar_state="expanded" 
 )
 
+# Iniezione CSS per Sidebar DARK, FISSA e nuove colorazioni Keyword
 st.markdown("""
     <style>
         #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
@@ -52,6 +53,14 @@ st.markdown("""
         }
         .title-option { color: #cf222e; font-size: 1.3rem; font-weight: bold; margin-bottom: 10px; display: block; }
         .plot-text { color: #24292f; font-style: italic; line-height: 1.6; }
+        
+        /* NUOVO COLORE KEYWORD SUGGERITE (VIOLA) */
+        .keyword-alt-card {
+            background-color: #f3e5f5; border: 1px solid #d1c4e9;
+            padding: 15px; border-radius: 8px; margin-bottom: 10px;
+            border-left: 5px solid #673ab7; color: #4527a0 !important;
+        }
+
         .persona-card {
             background-color: #f0f9ff; border: 1px solid #bae6fd;
             padding: 20px; border-radius: 10px; color: #0369a1;
@@ -61,7 +70,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 2. LOGICA DI BUSINESS E GENERATORE CREATIVO
+# 2. LOGICA DI BUSINESS E GENERAZIONE DINAMICA
 # ==============================================================================
 API_KEY = "ce57dc2330590954355f5c12171c7ce9"
 
@@ -81,8 +90,8 @@ class KDPBrain:
     @staticmethod
     def estimate_sales(bsr):
         if bsr <= 0: return 0
-        if bsr <= 1000: return 800
-        if bsr <= 10000: return 200
+        if bsr <= 1500: return 650
+        if bsr <= 10000: return 150
         return 5
 
     @staticmethod
@@ -94,19 +103,12 @@ class KDPBrain:
 
     @staticmethod
     def generate_editorial_proposal(target, pain, dream, keyword):
-        """Genera titoli e trama basati sulla Buyer Persona."""
         titles = [
-            f"MAI PIÙ {pain.upper()}: Il Metodo Definitivo per {target} che vogliono {dream}",
-            f"{keyword.title()}: La Guida Pratica per trasformare {pain} in {dream}",
-            f"Oltre {pain.title()}: Strategie quotidiane per {target} alla ricerca di {dream}"
+            f"BASTA {pain.upper()}: La Guida per {target} che vogliono {dream}",
+            f"{keyword.title()}: Trasforma {pain} in {dream}",
+            f"{target}: Come sconfiggere {pain} e vivere {dream}"
         ]
-        plot = f"""
-        Sei un {target} e ti senti esausto a causa di {pain}? Non sei solo. 
-        In questo libro, scopriremo come abbattere finalmente le barriere che ti separano da {dream}. 
-        Attraverso un percorso strutturato e testato, passeremo dalla frustrazione di {pain} alla libertà di {dream}. 
-        Cosa troverai all'interno: tecniche pratiche, esercizi quotidiani e la mentalità necessaria per cambiare rotta. 
-        Smetti di subire {pain} e inizia oggi il tuo viaggio verso {dream}.
-        """
+        plot = f"Un manuale scritto appositamente per {target}. Se combatti ogni giorno contro {pain}, questo libro è la tua mappa verso {dream}."
         return titles, plot
 
 # ==============================================================================
@@ -155,87 +157,107 @@ def scrape_books(mkt, keyword, pages, is_color):
 # ==============================================================================
 # 4. SIDEBAR: PERSONA LAB (DARK & FISSA)
 # ==============================================================================
-if 'kw_active' not in st.session_state: st.session_state['kw_active'] = ""
+# Inizializzazione session state per garantire il funzionamento della sidebar
+if 'kw_active' not in st.session_state:
+    st.session_state['kw_active'] = ""
 
 with st.sidebar:
     st.title("🛡️ STRATEGY COMMAND")
     if st.button("🔄 NUOVA ANALISI", use_container_width=True):
-        st.session_state['kw_active'] = ""; st.rerun()
+        st.session_state['kw_active'] = ""
+        st.rerun()
 
     st.markdown("---")
     st.subheader("👤 Identikit Persona")
     with st.expander("Definisci Lettore", expanded=True):
-        p_target = st.text_input("Chi è il lettore?", placeholder="es. Imprenditori stressati")
-        p_pain = st.text_input("Qual è il suo dolore?", placeholder="es. insonnia da lavoro")
-        p_dream = st.text_input("Cosa desidera?", placeholder="es. dormire 8 ore filate")
+        p_target = st.text_input("Chi è il lettore?", placeholder="es. Atleti")
+        p_pain = st.text_input("Qual è il suo dolore?", placeholder="es. dolori muscolari")
+        p_dream = st.text_input("Cosa desidera?", placeholder="es. recupero rapido")
     
     st.markdown("---")
+    # Generazione automatica keyword (Fixata)
+    if p_pain and p_dream:
+        k_suggerita = f"{p_pain.capitalize()} per {p_target}: Soluzioni per {p_dream}"
+        if st.button(f"🎯 Genera: {k_suggerita}", use_container_width=True):
+            st.session_state['kw_active'] = k_suggerita
+            st.rerun()
+
+    st.markdown("---")
     mkt = st.selectbox("Marketplace", ["Italia", "USA", "Spagna", "Francia", "Germania"])
+    
+    # Campo di input collegato al session_state
     query = st.text_input("🔍 Keyword Focus", value=st.session_state['kw_active'])
     
     if query:
         with st.expander("💡 Suggerimenti Autocomplete"):
             suggs = KDPFreeTools.get_amazon_suggestions(query, mkt)
             for s in suggs:
-                if st.button(f"🔎 {s}", key=s): st.session_state['kw_active'] = s; st.rerun()
+                if st.button(f"🔎 {s}", key=s, use_container_width=True):
+                    st.session_state['kw_active'] = s
+                    st.rerun()
 
     st.markdown("---")
     pgs = st.number_input("Pagine", min_value=24, value=120)
     is_color = st.checkbox("Stampa a Colori")
-    run = st.button("AVVIA ANALISI E REDAZIONE", type="primary", use_container_width=True)
+    run = st.button("LANCIA ANALISI", type="primary", use_container_width=True)
 
 # ==============================================================================
-# 5. MAIN DASHBOARD: REPORT & REDAZIONE LIBRO
-# =================================================).
+# 5. MAIN DASHBOARD: REPORT & REDAZIONE
 # ==============================================================================
 if run and query:
-    st.header(f"📊 Report & Proposta Editoriale: {query.upper()}")
+    st.header(f"📊 Business Analysis: {query.upper()}")
     
     st.markdown(f"""
     <div class="persona-card">
-        <b>Target:</b> {p_target} | <b>Problema:</b> {p_pain} | <b>Soluzione desiderata:</b> {p_dream}
+        <b>Buyer Persona:</b> {p_target} | <b>Pain Point:</b> {p_pain} | <b>Desire:</b> {p_dream}
     </div>
     """, unsafe_allow_html=True)
 
-    with st.spinner("Analisi di mercato e generazione proposta in corso..."):
+    with st.spinner("Scansione di mercato e calcolo Opportunity Score..."):
         df = scrape_books(mkt, query, pgs, is_color)
         
         if df is not None and not df.empty:
             st.dataframe(df, column_config={"Copertina": st.column_config.ImageColumn("Cover")}, use_container_width=True, hide_index=True)
             
-            # Statistiche
             avg_p = df['Prezzo'].mean()
             avg_roy = df['Royalty_Val'].mean()
             self_ratio = (len(df[df["Self-Pub"] == "Sì"]) / len(df)) * 100
             
+            # Calcolo Opportunity Score
+            o_score = 40
+            if avg_p > 13: o_score += 20
+            if self_ratio > 45: o_score += 20
+            if avg_roy > 3.5: o_score += 20
+            
             st.markdown("---")
-            c1, c2, c3 = st.columns(3)
+            c1, c2, c3, c4 = st.columns(4)
             c1.metric("Prezzo Medio", f"{avg_p:.2f} €")
             c2.metric("Royalty Media", f"{avg_roy:.2f} €")
             c3.metric("Self-Pub Ratio", f"{int(self_ratio)}%")
+            c4.metric("Opportunity Score", f"{o_score}/100")
 
-            # SEZIONE 6: PROPOSTA EDITORIALE (NUOVA CARATTERISTICA)
+            # SEZIONE SUGGERIMENTI ALTERNATIVI (COLORE VIOLA)
             st.markdown("---")
-            st.header("✍️ Proposta Editoriale Strategica")
-            st.info("Sulla base della Buyer Persona definita e dei dati di mercato, ecco le migliori opzioni per il tuo libro:")
-            
-            titles, plot = KDPBrain.generate_editorial_proposal(p_target, p_pain, p_dream, query)
-            
-            col_titles, col_plot = st.columns([1, 1.5])
-            
-            with col_titles:
-                st.subheader("📌 Titoli Consigliati (Hook)")
-                for t in titles:
-                    st.markdown(f"<div class='editorial-card'><span class='title-option'>{t}</span></div>", unsafe_allow_html=True)
-            
-            with col_plot:
-                st.subheader("📖 Bozza Trama (Persuasiva)")
-                st.markdown(f"""
-                <div class='editorial-card'>
-                    <p class='plot-text'>{plot}</p>
-                    <hr>
-                    <small><b>Suggerimento:</b> Usa questa trama come base per la tua descrizione Amazon (A+ Content o Blurb) focalizzandoti sui benefici emotivi.</small>
-                </div>
-                """, unsafe_allow_html=True)
+            st.subheader("💡 Keyword Strategiche Alternative (Colorate)")
+            ca1, ca2, ca3 = st.columns(3)
+            ca1.markdown(f"<div class='keyword-alt-card'><b>Focus Nicchia:</b><br>{p_target.title()} e {p_pain.lower()}</div>", unsafe_allow_html=True)
+            ca2.markdown(f"<div class='keyword-alt-card'><b>Focus Risultato:</b><br>Come ottenere {p_dream.lower()}</div>", unsafe_allow_html=True)
+            ca3.markdown(f"<div class='keyword-alt-card'><b>Focus Formato:</b><br>Workbook di {query.lower()}</div>", unsafe_allow_html=True)
+
+            # SEZIONE EDITORIALE CONDIZIONALE
+            st.markdown("---")
+            if o_score >= 60:
+                st.header("✍️ Proposta Editoriale Sbloccata")
+                titles, plot = KDPBrain.generate_editorial_proposal(p_target, p_pain, p_dream, query)
+                col_t, col_p = st.columns([1, 1.5])
+                with col_t:
+                    st.subheader("📌 Titoli Hook")
+                    for t in titles:
+                        st.markdown(f"<div class='editorial-card'><span class='title-option'>{t}</span></div>", unsafe_allow_html=True)
+                with col_p:
+                    st.subheader("📖 Bozza Trama")
+                    st.markdown(f"<div class='editorial-card'><p class='plot-text'>{plot}</p></div>", unsafe_allow_html=True)
+            else:
+                st.warning("⚠️ **Keyword non validata per la redazione.** L'Opportunity Score è troppo basso per suggerire titoli e trama in questa nicchia.")
         else:
-            st.error("Errore di connessione o limiti Amazon raggiunti. Riprova tra 60 secondi.")
+            st.error("Errore Amazon. Riprova tra 60 secondi.")
