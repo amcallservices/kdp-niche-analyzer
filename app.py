@@ -4,10 +4,10 @@ import requests
 from bs4 import BeautifulSoup
 import urllib.parse
 import re
-import openai # Assicurati di installare questa libreria
+import openai
 
 # ==============================================================================
-# 1. CONFIGURAZIONE UI & DESIGN SYSTEM (ELITE DARK)
+# 1. CONFIGURAZIONE UI ELITE DARK
 # ==============================================================================
 st.set_page_config(
     page_title="KDP OMNI-REASONER AI SURGICAL",
@@ -27,14 +27,7 @@ st.markdown("""
             background-color: #0d1117 !important;
             border-right: 1px solid #30363d;
         }
-        [data-testid="stSidebar"] .stMarkdown p, [data-testid="stSidebar"] label, 
-        [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {
-            color: #f0f6fc !important;
-        }
-        [data-testid="stSidebar"] input, [data-testid="stSidebar"] select {
-            background-color: #161b22 !important; color: #ffffff !important; border: 1px solid #30363d !important;
-        }
-
+        
         /* FIX METRICHE */
         [data-testid="stMetricValue"] { color: #1f2328 !important; font-weight: 800 !important; }
         [data-testid="stMetricLabel"] { color: #444c56 !important; }
@@ -42,22 +35,23 @@ st.markdown("""
 
         /* BOX RAGIONAMENTO GPT */
         .gpt-logic-box {
-            background-color: #1c2128;
-            border: 1px solid #3182ce;
-            padding: 15px;
-            border-radius: 8px;
-            color: #90cdf4;
-            font-size: 0.88rem;
-            margin-bottom: 20px;
+            background-color: #1c2128; border: 1px solid #3182ce; padding: 15px;
+            border-radius: 8px; color: #90cdf4; font-size: 0.88rem; margin-bottom: 20px;
             border-left: 5px solid #3182ce;
         }
-        .keyword-alt-card { background-color: #f3e5f5; border-left: 5px solid #673ab7; padding: 15px; border-radius: 8px; color: #4527a0 !important; margin-bottom: 10px; }
-        .editorial-card { background-color: #ffffff; border: 1px solid #e1e4e8; padding: 20px; border-radius: 12px; margin-bottom: 15px; border-top: 4px solid #28a745; }
+        .ai-audit-card {
+            background-color: #fff9db; border-left: 6px solid #fab005; padding: 20px;
+            border-radius: 10px; color: #856404; margin-bottom: 25px;
+        }
+        .editorial-card { 
+            background-color: #ffffff; border: 1px solid #e1e4e8; padding: 20px; 
+            border-radius: 12px; margin-bottom: 15px; border-top: 4px solid #28a745; 
+        }
     </style>
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 2. CONFIGURAZIONE CHIAVI API
+# 2. CHIAVI API
 # ==============================================================================
 WS_API_KEY = "50867242-8e16-4f72-b142-caef181401f6"
 OPENAI_API_KEY = "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"
@@ -65,38 +59,45 @@ OPENAI_API_KEY = "sk-proj-B7ea51FSXWP_54kinvZOY5anqXvTqPHNuZUbHUShmPrn-H-WogcI9T
 client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
 # ==============================================================================
-# 3. MOTORE DI INTELLIGENZA GPT (LOGICA CHIRURGICA)
+# 3. MOTORE DI RAGIONAMENTO OMNICOMPRENSIVO (GPT-4o)
 # ==============================================================================
 class SurgicalAI:
     @staticmethod
     def brainstorm_keyword(p_type, p_target, p_pain, p_dream):
-        """Usa GPT per generare una keyword basata sulla psicologia del profittevole."""
+        """Generazione Keyword con Analisi Strategica preventiva."""
         prompt = f"""
-        Sei un esperto Senior di Amazon KDP Marketing e uno Psicologo dei Consumi.
-        Analizza questo caso clinico editoriale:
-        - TIPO LIBRO: {p_type}
-        - TARGET: {p_target}
-        - PROBLEMA (PAIN): {p_pain}
-        - DESIDERIO (DREAM): {p_dream}
-
-        REGOLE:
-        1. Genera una sola keyword 'Bisturi' (Long Tail) ad altissima conversione.
-        2. Spiega in due righe il ragionamento psicologico dietro la scelta (White Space).
-        3. Formato output: KEYWORD | RAGIONAMENTO
+        Analizza come un esperto di KDP Marketing:
+        Formato: {p_type} | Target: {p_target} | Dolore: {p_pain} | Sogno: {p_dream}
+        
+        Compito:
+        1. Crea una sola Keyword Long Tail chirurgica.
+        2. Spiega la psicologia dell'acquisto in 2 righe.
+        Formato: KEYWORD: [testo] | LOGICA: [testo]
         """
         try:
             response = client.chat.completions.create(
-                model="gpt-4o", # O "gpt-3.5-turbo"
+                model="gpt-4o",
                 messages=[{"role": "user", "content": prompt}]
             )
             return response.choices[0].message.content
         except Exception as e:
-            return f"Errore AI: {str(e)} | Inserimento manuale consigliato."
+            return f"ERRORE API: {str(e)}"
 
     @staticmethod
-    def genera_contenuti_editoriali(p_type, p_target, p_pain, p_dream, kw):
-        """Genera 5 Proposte editoriali complete via GPT."""
-        prompt = f"Genera 5 titoli e 5 trame brevi per un libro '{p_type}' basato sulla keyword '{kw}'. Il target è {p_target}. Focus sul risolvere {p_pain} per ottenere {p_dream}."
+    def ai_data_audit(df, query, p_target):
+        """Analizza i dati reali di Amazon e fornisce un verdetto aziendale."""
+        avg_price = df['Prezzo'].mean()
+        self_ratio = (len(df[df["Self-Pub"] == "Sì"]) / len(df)) * 100
+        titles = " | ".join(df['Titolo'].tolist()[:10])
+        
+        prompt = f"""
+        Sei il Direttore Strategico. Analizza questi dati reali di Amazon per la keyword '{query}':
+        - Prezzo Medio: {avg_price:.2f}€
+        - % Autori Indipendenti: {self_ratio}%
+        - Titoli Competitor: {titles}
+        
+        Fornisci un Audit di 3 righe sulla fattibilità per un autore che punta al target '{p_target}'.
+        """
         try:
             response = client.chat.completions.create(
                 model="gpt-4o",
@@ -104,10 +105,27 @@ class SurgicalAI:
             )
             return response.choices[0].message.content
         except:
-            return "Impossibile generare contenuti editoriali."
+            return "Audit non disponibile."
+
+    @staticmethod
+    def genera_piano_editoriale(p_type, p_target, p_pain, p_dream, kw):
+        """Genera 5 Proposte editoriali (Titolo + Trama) ad alto impatto."""
+        prompt = f"""
+        Genera 5 opzioni di pubblicazione per '{kw}'.
+        Target: {p_target}. Risolvi {p_pain} per ottenere {p_dream}.
+        Per ogni opzione scrivi: TITOLO e una TRAMA di 2 righe molto persuasiva.
+        """
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": prompt}]
+            )
+            return response.choices[0].message.content
+        except:
+            return "Piano editoriale non disponibile."
 
 # ==============================================================================
-# 4. CORE SCRAPER (20 RISULTATI)
+# 4. CORE SCRAPER (20 COMPETITOR)
 # ==============================================================================
 def run_strategic_scan(mkt, keyword, pages):
     domains = {"Italia": "amazon.it", "USA": "amazon.com", "Spagna": "amazon.es", "Francia": "amazon.fr", "Germania": "amazon.de"}
@@ -131,85 +149,81 @@ def run_strategic_scan(mkt, keyword, pages):
             p_f = item.find('span', 'a-price-fraction')
             price = float(f"{p_w.text.replace(',','').replace('.','')}.{p_f.text}") if p_w and p_f else 0.0
             roy = round((price * 0.6) - (2.15 if pages <= 108 else 0.60 + (pages * 0.012)), 2)
-            results.append({"Preview": img, "Titolo": title, "Prezzo": price, "Royalty_Est": roy, "Self-Pub": "Sì" if "independently" in title.lower() or "pubblicato" in title.lower() else "No"})
+            results.append({"Preview": img, "Titolo": title, "Prezzo": price, "Royalty": roy, "Self-Pub": "Sì" if "independently" in title.lower() or "pubblicato" in title.lower() else "No"})
         return pd.DataFrame(results)
     except: return None
 
 # ==============================================================================
-# 5. SIDEBAR COMMAND CENTER
+# 5. SIDEBAR: BRAIN AI
 # ==============================================================================
 if 'kw_active' not in st.session_state: st.session_state['kw_active'] = ""
-if 'ai_reasoning' not in st.session_state: st.session_state['ai_reasoning'] = ""
+if 'ai_logic' not in st.session_state: st.session_state['ai_logic'] = ""
 
 with st.sidebar:
-    st.title("🩺 KDP SURGICAL AI")
-    if st.button("🔄 NUOVA SESSIONE", use_container_width=True):
-        st.session_state['kw_active'] = ""
-        st.session_state['ai_reasoning'] = ""
-        st.rerun()
+    st.title("🛡️ STRATEGY AI COMMAND")
+    if st.button("🔄 RESET", use_container_width=True):
+        st.session_state['kw_active'] = ""; st.session_state['ai_logic'] = ""; st.rerun()
 
     st.markdown("---")
-    st.subheader("📋 Diagnosi del Lettore")
-    with st.expander("Parametri della Persona", expanded=True):
-        p_type = st.selectbox("Formato Libro", ["Manuale Pratico", "Workbook di Esercizi", "Diario di Trasformazione", "Guida Passo-Passo"])
-        p_target = st.text_input("Identikit Target", placeholder="es. Mamme in carriera sopraffatte")
-        p_pain = st.text_input("Patologia (Dolore)", placeholder="es. mancanza di tempo per se stesse")
-        p_dream = st.text_input("Prognosi (Sogno)", placeholder="es. 1 ora di relax al giorno")
+    with st.expander("👤 Profilazione Buyer Persona", expanded=True):
+        p_type = st.selectbox("Formato", ["Manuale", "Workbook", "Diario", "Guida"])
+        p_target = st.text_input("Target", placeholder="es. Trader principianti")
+        p_pain = st.text_input("Dolore", placeholder="es. perdere soldi per emotività")
+        p_dream = st.text_input("Sogno", placeholder="es. entrate costanti ogni mese")
     
-    # PULSANTE BRAINSTORMING GPT
-    if st.button("🧠 GENERA KEYWORD CON GPT-4", use_container_width=True, type="primary"):
-        with st.spinner("Analisi psicografica in corso..."):
-            ai_output = SurgicalAI.brainstorm_keyword(p_type, p_target, p_pain, p_dream)
-            if "|" in ai_output:
-                kw, logic = ai_output.split("|")
-                st.session_state['kw_active'] = kw.strip()
-                st.session_state['ai_reasoning'] = logic.strip()
+    if st.button("🧠 GENERA STRATEGIA GPT-4o", use_container_width=True, type="primary"):
+        with st.spinner("L'AI sta ragionando..."):
+            res = SurgicalAI.brainstorm_keyword(p_type, p_target, p_pain, p_dream)
+            if "KEYWORD:" in res:
+                st.session_state['kw_active'] = res.split("KEYWORD:")[1].split("|")[0].strip()
+                st.session_state['ai_logic'] = res.split("LOGICA:")[1].strip()
             else:
-                st.session_state['kw_active'] = ai_output
+                st.error(res) # Mostra l'errore reale delle API
 
-    if st.session_state['ai_reasoning']:
-        st.markdown(f'<div class="gpt-logic-box"><b>AI LOGIC:</b> {st.session_state["ai_reasoning"]}</div>', unsafe_allow_html=True)
+    if st.session_state['ai_logic']:
+        st.markdown(f'<div class="gpt-logic-box"><b>AI STRATEGY:</b><br>{st.session_state["ai_logic"]}</div>', unsafe_allow_html=True)
 
     st.markdown("---")
     mkt = st.selectbox("Marketplace", ["Italia", "USA", "Spagna", "Francia", "Germania"])
-    query = st.text_input("🔍 Keyword Focus", value=st.session_state['kw_active'])
+    query = st.text_input("🔍 Keyword Analisi", value=st.session_state['kw_active'])
     pgs = st.number_input("Pagine", min_value=24, value=120)
-    run_btn = st.button("LANCIA DISSEZIONE MERCATO", use_container_width=True)
+    run_btn = st.button("LANCIA DISSEZIONE", use_container_width=True)
 
 # ==============================================================================
-# 6. DASHBOARD PRINCIPALE
+# 6. DASHBOARD PRINCIPALE: AUDIT & REDAZIONE AI
 # ==============================================================================
 if run_btn and query:
-    st.header(f"📊 Analisi Chirurgica: {query.upper()}")
+    st.header(f"📊 Report Chirurgico: {query.upper()}")
     
-    with st.spinner("Scansione di 20 competitor..."):
+    with st.spinner("Scansione competitor e Audit AI in corso..."):
         df = run_strategic_scan(mkt, query, pgs)
         
         if df is not None and not df.empty:
+            # --- AUDIT AI SUI DATI REALI ---
+            audit_report = SurgicalAI.ai_data_audit(df, query, p_target)
+            st.markdown(f'<div class="ai-audit-card"><b>🤖 AI EXECUTIVE AUDIT:</b><br>{audit_report}</div>', unsafe_allow_html=True)
+            
             st.dataframe(df, column_config={"Preview": st.column_config.ImageColumn("Copertina")}, use_container_width=True, hide_index=True)
             
             avg_p = df['Prezzo'].mean()
-            avg_roy = df['Royalty_Est'].mean()
             self_ratio = (len(df[df["Self-Pub"] == "Sì"]) / len(df)) * 100
             o_score = 40
             if avg_p > 13: o_score += 30
             if self_ratio > 40: o_score += 30
             
             st.markdown("---")
-            c1, c2, c3, c4 = st.columns(4)
+            c1, c2, c3 = st.columns(3)
             c1.metric("Prezzo Medio", f"{avg_p:.2f} €")
-            c2.metric("Royalty Media", f"{avg_roy:.2f} €")
-            c3.metric("Self-Pub Ratio", f"{int(self_ratio)}%")
-            c4.metric("Opportunity Score", f"{o_score}/100")
+            c2.metric("Indie Ratio", f"{int(self_ratio)}%")
+            c3.metric("Opportunity Score", f"{o_score}/100")
 
-            # SEZIONE EDITORIALE (5 PROPOSTE)
+            # --- PIANO EDITORIALE GPT ---
             if o_score >= 60:
                 st.markdown("---")
-                st.header("✍️ Piano Editoriale GPT-4")
-                with st.spinner("Generazione 5 proposte..."):
-                    piano = SurgicalAI.genera_contenuti_editoriali(p_type, p_target, p_pain, p_dream, query)
-                    st.markdown(f'<div class="editorial-card">{piano}</div>', unsafe_allow_html=True)
+                st.header("✍️ Piano Editoriale Consigliato (GPT-4o)")
+                piano = SurgicalAI.genera_piano_editorial(p_type, p_target, p_pain, p_dream, query)
+                st.markdown(f'<div class="editorial-card">{piano}</div>', unsafe_allow_html=True)
             else:
-                st.warning("⚠️ Score insufficiente. Prova a variare la keyword con il laboratorio AI.")
+                st.warning("⚠️ Score insufficiente. L'AI sconsiglia l'investimento su questa keyword specifica.")
         else:
             st.error("Errore Amazon. Riprova tra 60 secondi.")
