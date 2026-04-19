@@ -7,71 +7,57 @@ import re
 import openai
 
 # ==============================================================================
-# 1. DESIGN SYSTEM ELITE (SIDEBAR FISSA & TESTO NERO)
+# 1. DESIGN SYSTEM: TESTO NERO & CONTRASTO MASSIMO
 # ==============================================================================
-st.set_page_config(
-    page_title="KDP OMNI-REASONER 8.5", 
-    page_icon="⚡", 
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="KDP OMNI-REASONER 8.6", page_icon="🛡️", layout="wide")
 
 st.markdown("""
     <style>
-        /* UI GHOST: RIMOZIONE TOTALE HEADER E MENU */
-        #MainMenu {visibility: hidden;}
-        footer {visibility: hidden;}
-        header {visibility: hidden;}
+        /* RIMOZIONE ELEMENTI STREAMLIT */
+        #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
         [data-testid="collapsedControl"] { display: none !important; }
         
+        /* SIDEBAR FISSA */
         section[data-testid="stSidebar"] { 
-            background-color: #0d1117 !important; 
-            border-right: 1px solid #30363d;
-            min-width: 480px !important;
+            background-color: #0d1117 !important; border-right: 1px solid #30363d; min-width: 480px !important;
         }
 
-        /* METRICHE */
-        [data-testid="stMetricValue"] { color: #238636 !important; font-weight: 800 !important; }
-        .stMetric { background-color: #ffffff !important; border-left: 10px solid #238636 !important; padding: 20px !important; border-radius: 12px !important; }
+        /* FORZATURA TESTO NERO SU METRICHE (LABEL E VALORI) */
+        [data-testid="stMetricLabel"] p { color: #000000 !important; font-weight: bold !important; font-size: 1.1rem !important; }
+        [data-testid="stMetricValue"] { color: #238636 !important; font-weight: 900 !important; }
+        .stMetric { background-color: #ffffff !important; border: 2px solid #dee2e6 !important; padding: 15px !important; border-radius: 10px !important; }
 
-        /* BOX SPIEGAZIONE - TESTO NERO */
+        /* BOX SPIEGAZIONE E CARDS */
         .explanation-box {
-            background-color: #f8f9fa; border: 2px solid #dee2e6; padding: 20px; 
-            border-radius: 10px; color: #000000 !important; margin: 20px 0; font-size: 1rem;
+            background-color: #f1f3f5; border: 2px solid #ced4da; padding: 20px; 
+            border-radius: 10px; color: #000000 !important; margin: 20px 0;
         }
-        .explanation-box b { color: #000000 !important; }
-
-        /* EBOOK CARDS - SFONDO BIANCO E TESTO NERO */
         .ebook-suggestion-card {
             background-color: #ffffff !important; border: 3px solid #ffd700 !important; 
             padding: 25px !important; border-radius: 15px !important; margin-bottom: 20px !important;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
         }
-        .ebook-title { color: #b8860b !important; font-size: 1.4rem !important; font-weight: 900 !important; display: block; margin-bottom: 8px; }
-        .ebook-plot { color: #000000 !important; line-height: 1.7 !important; font-size: 1.1rem !important; font-weight: 500; }
+        .ebook-title { color: #856404 !important; font-size: 1.4rem !important; font-weight: 900 !important; display: block; margin-bottom: 10px; }
+        .ebook-plot { color: #000000 !important; line-height: 1.6 !important; font-size: 1.1rem !important; }
         
-        /* BANNER NEGATIVO */
-        .negative-verdict {
-            background-color: #fff5f5 !important; color: #c92a2a !important; padding: 30px; border-radius: 15px;
-            text-align: center; font-weight: 900; font-size: 1.8rem; margin: 30px 0; border: 3px solid #ffc9c9;
-        }
-
-        /* FORZATURA TESTO GENERALE NERO NELLE SEZIONI RISULTATI */
-        .stMarkdown p, .stMarkdown li, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 { color: #000000 !important; }
+        /* TESTO GENERALE */
+        .stMarkdown p, .stMarkdown li, h1, h2, h3 { color: #000000 !important; }
+        
+        /* TABELLA RISULTATI */
+        .stDataFrame { border: 1px solid #dee2e6; border-radius: 10px; }
     </style>
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 2. CONFIGURAZIONE API & PERSISTENZA
+# 2. API & STATE
 # ==============================================================================
 ANT_API_KEY = "5a93911a587c4aff8d8dc7f2af9ea0db"
-SCRAPER_API_KEY = st.secrets.get("SCRAPER_API_KEY", "")
 
 try:
     client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
     API_READY = True
 except:
-    st.error("⚠️ OpenAI API Key non trovata nei Secret.")
+    st.error("⚠️ OpenAI Key mancante.")
     API_READY = False
 
 if 'results_df' not in st.session_state: st.session_state.results_df = None
@@ -80,136 +66,137 @@ if 'score' not in st.session_state: st.session_state.score = 0
 if 'kw_active' not in st.session_state: st.session_state.kw_active = ""
 
 # ==============================================================================
-# 3. MOTORE DI SCRAPING TURBO (ANT + SCRAPERAPI)
+# 3. MOTORE DI SCRAPING PROFONDO (BSR & SELF-PUB FOCUS)
 # ==============================================================================
-def fetch_page(url, provider="ant"):
-    if provider == "ant":
-        api_url = f"https://api.scrapingant.com/v2/general?url={urllib.parse.quote(url)}&x-api-key={ANT_API_KEY}&browser=false&proxy_type=residential"
-    else:
-        api_url = f"http://api.scraperapi.com?api_key={SCRAPER_API_KEY}&url={urllib.parse.quote(url)}"
-    try:
-        response = requests.get(api_url, timeout=25)
-        return response.text if response.status_code == 200 else None
-    except: return None
-
-def run_expert_scan(mkt, keyword):
+def run_deep_detection_scan(mkt, keyword):
     domains = {"Italia": "amazon.it", "USA": "amazon.com", "Spagna": "amazon.es", "Francia": "amazon.fr", "Germania": "amazon.de"}
     domain = domains.get(mkt, "amazon.it")
-    unique_results = []
+    results = []
     seen_titles = set()
     p_bar = st.progress(0)
     
     for page in range(1, 10): 
-        if len(unique_results) >= 40: break
-        target_url = f"https://www.{domain}/s?k={keyword.replace(' ', '+')}&i=stripbooks&page={page}"
-        html = fetch_page(target_url, "ant")
-        if not html or "captcha" in html.lower(): html = fetch_page(target_url, "scraperapi")
-        if not html: continue
+        if len(results) >= 40: break
+        url = f"https://www.{domain}/s?k={keyword.replace(' ', '+')}&i=stripbooks&page={page}"
+        api_url = f"https://api.scrapingant.com/v2/general?url={urllib.parse.quote(url)}&x-api-key={ANT_API_KEY}&browser=false&proxy_type=residential"
         
-        soup = BeautifulSoup(html, 'html.parser')
-        items = soup.find_all('div', {'data-component-type': 's-search-result'})
-        for item in items:
-            title = item.h2.text.strip() if item.h2 else "N/A"
-            if title in seen_titles or title == "N/A": continue
-            full_text = item.get_text(separator=' ').lower()
-            if not any(x in full_text for x in ['pagine', 'kindle', 'copertina', 'formato']): continue
+        try:
+            resp = requests.get(api_url, timeout=30)
+            soup = BeautifulSoup(resp.text, 'html.parser')
+            items = soup.find_all('div', {'data-component-type': 's-search-result'})
             
-            price = 0.0
-            p_w = item.find('span', 'a-price-whole')
-            p_f = item.find('span', 'a-price-fraction')
-            if p_w and p_f: price = float(f"{p_w.text.replace(',','').replace('.','')}.{p_f.text}")
-            
-            if price > 0:
-                seen_titles.add(title)
+            for item in items:
+                title = item.h2.text.strip() if item.h2 else "N/A"
+                if title in seen_titles or title == "N/A": continue
+                
+                # Estrazione TESTUALE profonda
+                raw_text = item.get_text(separator=' ').lower()
+                
+                # 1. BSR DETECTION (Regex avanzata per HTML statico)
                 bsr = 0
-                # Regex flessibile per trovare il BSR nell'HTML puro
-                bsr_match = re.search(r'n\.\s*([0-9.,]+)\s*in', full_text)
-                if bsr_match: bsr = int(bsr_match.group(1).replace('.', '').replace(',', ''))
-                unique_results.append({
-                    "Preview": item.find('img', class_='s-image')['src'] if item.find('img', class_='s-image') else "",
-                    "Titolo": title, "Prezzo": price, "BSR": bsr if bsr > 0 else "N/D", 
-                    "Self": "Sì" if any(x in full_text for x in ['independently', 'kdp', 'createspace', 'indipendente']) else "No"
-                })
-            if len(unique_results) >= 40: break
-        p_bar.progress(len(unique_results) / 40 if len(unique_results) <= 40 else 1.0)
+                patterns = [r'n\.\s*([0-9.,]+)\s*in', r'rank\s*#?\s*([0-9.,]+)', r'posiziona\s*([0-9.,]+)']
+                for p in patterns:
+                    m = re.search(p, raw_text)
+                    if m: 
+                        bsr = int(m.group(1).replace('.', '').replace(',', ''))
+                        break
+
+                # 2. SELF-PUB DETECTION
+                is_self = "No"
+                if any(x in raw_text for x in ['independently', 'kdp', 'createspace', 'indipendente', 'self-pub']):
+                    is_self = "Sì (Self-Pub)"
+
+                # 3. PREZZO
+                price = 0.0
+                p_w = item.find('span', 'a-price-whole')
+                p_f = item.find('span', 'a-price-fraction')
+                if p_w and p_f: price = float(f"{p_w.text.replace(',','').replace('.','')}.{p_f.text}")
+                
+                if price > 0:
+                    seen_titles.add(title)
+                    results.append({
+                        "Preview": item.find('img', class_='s-image')['src'] if item.find('img', class_='s-image') else "",
+                        "Titolo": title, "Prezzo": price, "BSR": bsr if bsr > 0 else "N/D", "Autore/Tipo": is_self
+                    })
+                if len(results) >= 40: break
+            p_bar.progress(len(results) / 40 if len(results) <= 40 else 1.0)
+        except: continue
+    
     p_bar.empty()
-    return pd.DataFrame(unique_results)
+    return pd.DataFrame(results)
 
 # ==============================================================================
-# 4. SIDEBAR FISSA (FULL GENRES REINSTATED)
+# 4. SIDEBAR FISSA
 # ==============================================================================
 with st.sidebar:
-    st.title("🛡️ STRATEGY LAB 8.5")
+    st.title("🛡️ STRATEGY LAB 8.6")
     if st.button("🔄 RESET"):
-        for key in ['results_df', 'ebook_ideas', 'kw_active', 'score']: st.session_state[key] = None if key != 'score' else 0
+        for k in ['results_df', 'ebook_ideas', 'kw_active', 'score']: st.session_state[k] = None
         st.rerun()
 
     st.markdown("---")
-    # LISTA GENERI COMPLETA RIPRISTINATA
-    p_type = st.selectbox("Genere / Formato", [
-        "Saggio Scientifico", "Quiz Scientifico", "Manuale Tecnico", 
-        "Religioso / Teologico", "Spirituale / Esoterico", "Meditazione / Mindfulness", 
-        "Business e Marketing", "Romanzo Rosa", "Thriller / Noir", 
-        "Fantasy", "Fantascienza", "Manuale Psicologico", "Biografia", "Ricettario"
-    ])
-    p_desc = st.text_area("Descrizione Progetto", placeholder="Di cosa parla il tuo libro?", height=100)
-    p_target = st.text_input("Identikit Lettore", placeholder="Chi leggerà questo libro?")
+    p_type = st.selectbox("Genere", ["Saggio Scientifico", "Manuale Tecnico", "Business", "Romanzo Rosa", "Thriller", "Ricettario", "Spirituale"])
+    p_desc = st.text_area("Descrizione Progetto", height=100)
+    p_target = st.text_input("Target Lettori")
     
     if st.button("🧠 GENERA KEYWORD AI", type="primary") and API_READY:
-        prompt = f"Genera UNA keyword per un {p_type}. Descrizione: {p_desc}. Target: {p_target}. Rispondi: KEYWORD: [testo] | LOGICA: [testo]"
+        prompt = f"Genera UNA keyword per {p_type}. Info: {p_desc}. Target: {p_target}. Rispondi: KEYWORD: [testo] | LOGICA: [testo]"
         res = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}]).choices[0].message.content
         st.session_state.kw_active = res.split("KEYWORD:")[1].split("|")[0].strip()
 
     if st.session_state.kw_active:
         final_q = st.text_input("Keyword finale:", value=st.session_state.kw_active)
         mkt = st.selectbox("Marketplace", ["Italia", "USA", "Spagna", "Francia", "Germania"])
-        run_btn = st.button("🚀 ANALIZZA 40 LIBRI UNICI", use_container_width=True)
+        run_btn = st.button("🚀 ANALIZZA 40 LIBRI", use_container_width=True)
 
 # ==============================================================================
-# 5. DASHBOARD (BLACK TEXT PERSISTENCE)
+# 5. DASHBOARD: RISULTATI E SPIEGAZIONI
 # ==============================================================================
 if 'run_btn' in locals() and run_btn and API_READY:
-    with st.spinner("Analisi Sniper in corso..."):
-        df = run_expert_scan(mkt, final_q)
+    with st.spinner("Analisi profonda in corso..."):
+        df = run_deep_detection_scan(mkt, final_q)
         if not df.empty:
             st.session_state.results_df = df
             avg_p = df['Prezzo'].mean()
-            self_r = (len(df[df['Self'] == "Sì"]) / len(df)) * 100
+            self_count = len(df[df['Autore/Tipo'].str.contains("Sì")])
+            self_r = (self_count / len(df)) * 100
             st.session_state.score = 40 + (30 if avg_p > 13.5 else 0) + (30 if self_r > 40 else 0)
             
             if st.session_state.score >= 60:
-                p_ebook = f"Analisi POSITIVA per '{final_q}' ({p_type}). Genera 3 titoli e 3 trame (100 parole). Formato: TITOLO: [testo] | TRAMA: [testo]"
-                st.session_state.ebook_ideas = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": p_ebook}]).choices[0].message.content
-            else:
-                st.session_state.ebook_ideas = "NEGATIVE"
+                p_eb = f"Analisi POSITIVA per '{final_q}'. Genera 3 titoli e 3 trame. FORMATO OBBLIGATORIO: [PROPOSTA_START] TITOLO: [testo] | TRAMA: [testo] [PROPOSTA_END]"
+                st.session_state.ebook_ideas = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": p_eb}]).choices[0].message.content
+            else: st.session_state.ebook_ideas = "NEGATIVE"
 
-# VISUALIZZAZIONE RISULTATI
 if st.session_state.results_df is not None:
-    st.header(f"📊 Report Analisi: {final_q.upper()}")
+    st.header(f"📊 Risultati per: {final_q.upper()}")
     
+    # SPIEGAZIONE TERMINI (TESTO NERO)
     st.markdown("""
     <div class="explanation-box">
-        <b>💡 Glossario Tecnico (Testo Nero):</b><br>
-        • <b>BSR (Best Sellers Rank):</b> La classifica di vendita. Più è basso, più il libro vende ogni giorno.<br>
-        • <b>Indie Ratio:</b> Percentuale di autori Self-Publisher. Se è alta, c'è spazio per un autore indipendente.<br>
-        • <b>Opportunity Score:</b> Valutazione complessiva. Sopra 60 è una nicchia profittevole.
+        <b>📘 Manuale di Lettura Dati:</b><br>
+        • <b>BSR (Best Sellers Rank):</b> Indica la popolarità. Più il numero è basso (es. 500), più il libro vende. Se vedi "N/D" Amazon sta limitando i dati della pagina.<br>
+        • <b>Indie Ratio:</b> Percentuale di Self-Publisher. Se è alta, la nicchia è scalabile per te.<br>
+        • <b>Opportunity Score:</b> Valutazione finale. Sopra 60 è un semaforo verde per pubblicare.
     </div>
     """, unsafe_allow_html=True)
     
     st.dataframe(st.session_state.results_df, use_container_width=True, hide_index=True)
     
-    c1, c2 = st.columns(2)
+    # METRICHE (FORZATE NERE)
+    c1, c2, c3 = st.columns(3)
     c1.metric("Prezzo Medio", f"{st.session_state.results_df['Prezzo'].mean():.2f} €")
-    c2.metric("Indie Ratio", f"{int((len(st.session_state.results_df[st.session_state.results_df['Self'] == 'Sì']) / len(st.session_state.results_df)) * 100)}%")
+    c2.metric("Indie Ratio", f"{int((len(st.session_state.results_df[st.session_state.results_df['Autore/Tipo'].str.contains('Sì')]) / len(st.session_state.results_df)) * 100)}%")
+    c3.metric("Score Nicchia", f"{st.session_state.score}/100")
 
+    # VERDETTO E TITOLI
     if st.session_state.score >= 60:
-        st.success(f"✅ ANALISI POSITIVA ({st.session_state.score}/100)")
-        st.header("🎯 Proposte eBook Consigliate")
-        ebooks = st.session_state.ebook_ideas.split("TITOLO:")
-        for eb in ebooks[1:]:
-            parts = eb.split("| TRAMA:")
-            if len(parts) > 1:
-                st.markdown(f'<div class="ebook-suggestion-card"><span class="ebook-title">📘 {parts[0].strip()}</span><p class="ebook-plot">{parts[1].strip()}</p></div>', unsafe_allow_html=True)
+        st.success("✅ ANALISI POSITIVA: Ecco le tue opportunità editoriali")
+        proposte = st.session_state.ebook_ideas.split("[PROPOSTA_START]")
+        for prop in proposte[1:]:
+            clean_prop = prop.split("[PROPOSTA_END]")[0]
+            t = clean_prop.split("| TRAMA:")[0].replace("TITOLO:", "").strip()
+            p = clean_prop.split("| TRAMA:")[1].strip()
+            st.markdown(f'<div class="ebook-suggestion-card"><span class="ebook-title">📘 {t}</span><p class="ebook-plot">{p}</p></div>', unsafe_allow_html=True)
     else:
-        st.markdown(f'<div class="negative-verdict">❌ ANALISI NEGATIVA ({st.session_state.score}/100)</div>', unsafe_allow_html=True)
-        st.warning("⚠️ Parametri insufficienti. Si consiglia di rigenerare la keyword AI.")
+        st.error("❌ ANALISI NEGATIVA: Nicchia troppo competitiva o poco profittevole.")
+        st.info("💡 Prova a rigenerare la Keyword cambiando la descrizione o il target nella sidebar.")
