@@ -2,28 +2,25 @@ import streamlit as st
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
-import time
-import re
-import io
 import urllib.parse
+import re
+import openai # Assicurati di installare questa libreria
 
 # ==============================================================================
 # 1. CONFIGURAZIONE UI & DESIGN SYSTEM (ELITE DARK)
 # ==============================================================================
 st.set_page_config(
-    page_title="KDP OMNI-REASONER ELITE 2026",
-    page_icon="🤖",
+    page_title="KDP OMNI-REASONER AI SURGICAL",
+    page_icon="🧠",
     layout="wide",
     initial_sidebar_state="expanded" 
 )
 
-# Iniezione CSS per Sidebar DARK e FIX colori metriche bianche
 st.markdown("""
     <style>
         #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
         [data-testid="collapsedControl"] { display: none !important; }
         
-        /* SIDEBAR DARK */
         section[data-testid="stSidebar"] {
             min-width: 450px !important;
             max-width: 450px !important;
@@ -38,51 +35,79 @@ st.markdown("""
             background-color: #161b22 !important; color: #ffffff !important; border: 1px solid #30363d !important;
         }
 
-        /* FIX METRICHE BIANCHE: Forzo il colore del testo dei risultati */
-        [data-testid="stMetricValue"] {
-            color: #1f2328 !important;
-            font-weight: 800 !important;
-        }
-        [data-testid="stMetricLabel"] {
-            color: #444c56 !important;
-        }
-        .stMetric {
-            background-color: #ffffff !important;
-            border: 1px solid #d0d7de !important;
-            border-left: 8px solid #0969da !important;
-            padding: 15px !important;
-            border-radius: 12px !important;
-        }
+        /* FIX METRICHE */
+        [data-testid="stMetricValue"] { color: #1f2328 !important; font-weight: 800 !important; }
+        [data-testid="stMetricLabel"] { color: #444c56 !important; }
+        .stMetric { background-color: #ffffff !important; border-left: 8px solid #0969da !important; padding: 15px !important; border-radius: 12px !important; }
 
-        /* STILI CARTE */
-        .ai-audit-card { background-color: #fff9db; border-left: 6px solid #fab005; padding: 20px; border-radius: 10px; color: #856404; margin-bottom: 20px; }
+        /* BOX RAGIONAMENTO GPT */
+        .gpt-logic-box {
+            background-color: #1c2128;
+            border: 1px solid #3182ce;
+            padding: 15px;
+            border-radius: 8px;
+            color: #90cdf4;
+            font-size: 0.88rem;
+            margin-bottom: 20px;
+            border-left: 5px solid #3182ce;
+        }
         .keyword-alt-card { background-color: #f3e5f5; border-left: 5px solid #673ab7; padding: 15px; border-radius: 8px; color: #4527a0 !important; margin-bottom: 10px; }
         .editorial-card { background-color: #ffffff; border: 1px solid #e1e4e8; padding: 20px; border-radius: 12px; margin-bottom: 15px; border-top: 4px solid #28a745; }
-        .title-option { color: #cf222e; font-size: 1.15rem; font-weight: bold; display: block; margin-bottom: 5px; }
     </style>
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 2. LOGICA INTEGRATA GPT & STRATEGIA
+# 2. CONFIGURAZIONE CHIAVI API
 # ==============================================================================
 WS_API_KEY = "50867242-8e16-4f72-b142-caef181401f6"
+OPENAI_API_KEY = "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"
 
-class GPTStratega:
-    @staticmethod
-    def genera_5_proposte(p_type, p_target, p_pain, p_dream):
-        """Genera 5 titoli e 5 trame professionali."""
-        proposte = []
-        templates = [
-            {"t": f"MAI PIÙ {p_pain.upper()}: Il Metodo {p_type} per {p_target}", "p": f"Una guida chirurgica per eliminare {p_pain} e raggiungere {p_dream}."},
-            {"t": f"{p_type} di {p_dream}: Protocollo per {p_target}", "p": f"Trasforma la tua vita superando {p_pain} con questo {p_type} pratico."},
-            {"t": f"{p_target}: La Scienza del {p_dream}", "p": f"Perché continui a soffrire di {p_pain}? Scopri come questo {p_type} cambierà tutto."},
-            {"t": f"Oltre {p_pain.capitalize()}: {p_type} Strategico", "p": f"Il manuale definitivo per {p_target} che non accettano compromessi su {p_dream}."},
-            {"t": f"Il Codice {p_dream.capitalize()}: Manuale per {p_target}", "p": f"Dimentica {p_pain}. Inizia oggi il tuo percorso basato sul nostro {p_type} esclusivo."}
-        ]
-        return templates
+client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
 # ==============================================================================
-# 3. MOTORE DI SCRAPING (20 RISULTATI)
+# 3. MOTORE DI INTELLIGENZA GPT (LOGICA CHIRURGICA)
+# ==============================================================================
+class SurgicalAI:
+    @staticmethod
+    def brainstorm_keyword(p_type, p_target, p_pain, p_dream):
+        """Usa GPT per generare una keyword basata sulla psicologia del profittevole."""
+        prompt = f"""
+        Sei un esperto Senior di Amazon KDP Marketing e uno Psicologo dei Consumi.
+        Analizza questo caso clinico editoriale:
+        - TIPO LIBRO: {p_type}
+        - TARGET: {p_target}
+        - PROBLEMA (PAIN): {p_pain}
+        - DESIDERIO (DREAM): {p_dream}
+
+        REGOLE:
+        1. Genera una sola keyword 'Bisturi' (Long Tail) ad altissima conversione.
+        2. Spiega in due righe il ragionamento psicologico dietro la scelta (White Space).
+        3. Formato output: KEYWORD | RAGIONAMENTO
+        """
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o", # O "gpt-3.5-turbo"
+                messages=[{"role": "user", "content": prompt}]
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            return f"Errore AI: {str(e)} | Inserimento manuale consigliato."
+
+    @staticmethod
+    def genera_contenuti_editoriali(p_type, p_target, p_pain, p_dream, kw):
+        """Genera 5 Proposte editoriali complete via GPT."""
+        prompt = f"Genera 5 titoli e 5 trame brevi per un libro '{p_type}' basato sulla keyword '{kw}'. Il target è {p_target}. Focus sul risolvere {p_pain} per ottenere {p_dream}."
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": prompt}]
+            )
+            return response.choices[0].message.content
+        except:
+            return "Impossibile generare contenuti editoriali."
+
+# ==============================================================================
+# 4. CORE SCRAPER (20 RISULTATI)
 # ==============================================================================
 def run_strategic_scan(mkt, keyword, pages):
     domains = {"Italia": "amazon.it", "USA": "amazon.com", "Spagna": "amazon.es", "Francia": "amazon.fr", "Germania": "amazon.de"}
@@ -96,116 +121,95 @@ def run_strategic_scan(mkt, keyword, pages):
             timeout=30
         )
         if response.status_code != 200: return None
-        
         soup = BeautifulSoup(response.text, 'html.parser')
-        # ANALISI DI 20 LIBRI
         items = soup.find_all('div', {'data-component-type': 's-search-result'})[:20]
-        
         results = []
-        p_bar = st.progress(0)
-        for i, item in enumerate(items):
+        for item in items:
             title = item.h2.text.strip() if item.h2 else "N/A"
             img = item.find('img', class_='s-image')['src'] if item.find('img', class_='s-image') else ""
             p_w = item.find('span', 'a-price-whole')
             p_f = item.find('span', 'a-price-fraction')
             price = float(f"{p_w.text.replace(',','').replace('.','')}.{p_f.text}") if p_w and p_f else 0.0
             roy = round((price * 0.6) - (2.15 if pages <= 108 else 0.60 + (pages * 0.012)), 2)
-            
-            results.append({
-                "Copertina": img, "Titolo": title, "Prezzo": price, 
-                "Royalty_Est": roy, "Self-Pub": "Sì" if "independently" in title.lower() or "pubblicato" in title.lower() else "No"
-            })
-            p_bar.progress((i + 1) / len(items))
+            results.append({"Preview": img, "Titolo": title, "Prezzo": price, "Royalty_Est": roy, "Self-Pub": "Sì" if "independently" in title.lower() or "pubblicato" in title.lower() else "No"})
         return pd.DataFrame(results)
     except: return None
 
 # ==============================================================================
-# 4. SIDEBAR COMMAND CENTER (INTELLIGENT KEYWORD GEN)
+# 5. SIDEBAR COMMAND CENTER
 # ==============================================================================
 if 'kw_active' not in st.session_state: st.session_state['kw_active'] = ""
+if 'ai_reasoning' not in st.session_state: st.session_state['ai_reasoning'] = ""
 
 with st.sidebar:
-    st.title("🛡️ STRATEGY AGENT AI")
-    
+    st.title("🩺 KDP SURGICAL AI")
     if st.button("🔄 NUOVA SESSIONE", use_container_width=True):
-        st.session_state['kw_active'] = ""; st.rerun()
+        st.session_state['kw_active'] = ""
+        st.session_state['ai_reasoning'] = ""
+        st.rerun()
 
     st.markdown("---")
-    st.subheader("🤖 Laboratorio Strategico AI")
-    with st.container():
-        p_type = st.selectbox("Angolo Editoriale", ["Manuale Pratico", "Workbook", "Diario", "Guida Passo-Passo", "Ricettario"])
-        p_target = st.text_input("Lettore Target", placeholder="es. Imprenditori Digitali")
-        p_pain = st.text_input("Dolore / Problema", placeholder="es. tasse elevate")
-        p_dream = st.text_input("Risultato / Sogno", placeholder="es. risparmio fiscale")
+    st.subheader("📋 Diagnosi del Lettore")
+    with st.expander("Parametri della Persona", expanded=True):
+        p_type = st.selectbox("Formato Libro", ["Manuale Pratico", "Workbook di Esercizi", "Diario di Trasformazione", "Guida Passo-Passo"])
+        p_target = st.text_input("Identikit Target", placeholder="es. Mamme in carriera sopraffatte")
+        p_pain = st.text_input("Patologia (Dolore)", placeholder="es. mancanza di tempo per se stesse")
+        p_dream = st.text_input("Prognosi (Sogno)", placeholder="es. 1 ora di relax al giorno")
     
-    # GENERATORE KEYWORD INTELLIGENTE
-    if p_target and p_pain and p_dream:
-        # Logica AI per keyword "chirurgica"
-        final_kw = f"{p_type} di {p_pain} per {p_target}: Soluzioni per {p_dream}"
-        st.info(f"💡 **AI Suggestion:** La keyword sopra è ottimizzata per intercettare il bisogno specifico del tuo target.")
-        if st.button(f"🎯 APPLICA KEYWORD AI", use_container_width=True):
-            st.session_state['kw_active'] = final_kw; st.rerun()
+    # PULSANTE BRAINSTORMING GPT
+    if st.button("🧠 GENERA KEYWORD CON GPT-4", use_container_width=True, type="primary"):
+        with st.spinner("Analisi psicografica in corso..."):
+            ai_output = SurgicalAI.brainstorm_keyword(p_type, p_target, p_pain, p_dream)
+            if "|" in ai_output:
+                kw, logic = ai_output.split("|")
+                st.session_state['kw_active'] = kw.strip()
+                st.session_state['ai_reasoning'] = logic.strip()
+            else:
+                st.session_state['kw_active'] = ai_output
+
+    if st.session_state['ai_reasoning']:
+        st.markdown(f'<div class="gpt-logic-box"><b>AI LOGIC:</b> {st.session_state["ai_reasoning"]}</div>', unsafe_allow_html=True)
 
     st.markdown("---")
-    mkt = st.selectbox("Mercato Amazon", ["Italia", "USA", "Spagna", "Francia", "Germania"])
-    query = st.text_input("🔍 Focus Keyword (Analisi)", value=st.session_state['kw_active'])
-    pgs = st.number_input("Pagine Stimate", min_value=24, value=120)
-    
-    run_btn = st.button("LANCIA ANALISI OMNIBUS", type="primary", use_container_width=True)
+    mkt = st.selectbox("Marketplace", ["Italia", "USA", "Spagna", "Francia", "Germania"])
+    query = st.text_input("🔍 Keyword Focus", value=st.session_state['kw_active'])
+    pgs = st.number_input("Pagine", min_value=24, value=120)
+    run_btn = st.button("LANCIA DISSEZIONE MERCATO", use_container_width=True)
 
 # ==============================================================================
-# 5. DASHBOARD: VERDETTO, AUDIT & REDAZIONE (5 PROPOSTE)
+# 6. DASHBOARD PRINCIPALE
 # ==============================================================================
 if run_btn and query:
-    st.header(f"📊 Analisi Competitiva: {query.upper()}")
+    st.header(f"📊 Analisi Chirurgica: {query.upper()}")
     
-    with st.spinner("Analisi di 20 competitor in corso..."):
-        df_results = run_strategic_scan(mkt, query, pgs)
+    with st.spinner("Scansione di 20 competitor..."):
+        df = run_strategic_scan(mkt, query, pgs)
         
-        if df_results is not None and not df_results.empty:
-            # Mostro la tabella per trasparenza
-            st.dataframe(df_results, column_config={"Copertina": st.column_config.ImageColumn("Preview")}, use_container_width=True, hide_index=True)
+        if df is not None and not df.empty:
+            st.dataframe(df, column_config={"Preview": st.column_config.ImageColumn("Copertina")}, use_container_width=True, hide_index=True)
             
-            # Calcolo Metriche Quantitative
-            avg_p = df_results['Prezzo'].mean()
-            avg_roy = df_results['Royalty_Est'].mean()
-            self_ratio = (len(df_results[df_results["Self-Pub"] == "Sì"]) / len(df_results)) * 100
-            
-            # Opportunity Score
+            avg_p = df['Prezzo'].mean()
+            avg_roy = df['Royalty_Est'].mean()
+            self_ratio = (len(df[df["Self-Pub"] == "Sì"]) / len(df)) * 100
             o_score = 40
-            if avg_p > 13: o_score += 20
-            if self_ratio > 50: o_score += 20
-            if avg_roy > 3.5: o_score += 20
+            if avg_p > 13: o_score += 30
+            if self_ratio > 40: o_score += 30
             
             st.markdown("---")
-            # Metriche con FIX COLORE
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Prezzo Medio", f"{avg_p:.2f} €")
             c2.metric("Royalty Media", f"{avg_roy:.2f} €")
             c3.metric("Self-Pub Ratio", f"{int(self_ratio)}%")
             c4.metric("Opportunity Score", f"{o_score}/100")
 
-            # --- KEYWORD ALTERNATIVE (SOLO FORMATO) ---
-            st.markdown("---")
-            st.subheader("🔄 Varianti di Formato Suggerite")
-            formati = ["Workbook", "Manuale", "Diario", "Prontuario"]
-            fcols = st.columns(4)
-            for i, f in enumerate(formati):
-                alt_kw = f"{f} {query.split('per')[0]}"
-                fcols[i].markdown(f"<div class='keyword-alt-card'><b>{f} Edition</b><br>{alt_kw}</div>", unsafe_allow_html=True)
-
-            # --- REDAZIONE CONDIZIONALE (5 TITOLI + TRAME) ---
-            st.markdown("---")
+            # SEZIONE EDITORIALE (5 PROPOSTE)
             if o_score >= 60:
-                st.header("✍️ Piano Editoriale Sbloccato (5 Opzioni)")
-                st.success("La keyword è stata validata come PROFITTEVOLE. Ecco 5 angoli di marketing per il tuo libro:")
-                
-                proposte = GPTStratega.genera_5_proposte(p_type, p_target, p_pain, p_dream)
-                
-                for idx, prop in enumerate(proposte):
-                    with st.expander(f"OPZIONE {idx+1}: {prop['t']}"):
-                        st.markdown(f"<div class='editorial-card'><span class='title-option'>{prop['t']}</span><p><i>{prop['p']}</i></p></div>", unsafe_allow_html=True)
+                st.markdown("---")
+                st.header("✍️ Piano Editoriale GPT-4")
+                with st.spinner("Generazione 5 proposte..."):
+                    piano = SurgicalAI.genera_contenuti_editoriali(p_type, p_target, p_pain, p_dream, query)
+                    st.markdown(f'<div class="editorial-card">{piano}</div>', unsafe_allow_html=True)
             else:
-                st.warning("⚠️ Opportunity Score insufficiente (Sotto 60). Il sistema sconsiglia la redazione automatica per questa specifica keyword. Prova a cambiare formato o target.")
+                st.warning("⚠️ Score insufficiente. Prova a variare la keyword con il laboratorio AI.")
         else:
-            st.error("Amazon ha limitato la richiesta o la API Key non è valida. Riprova tra 60 secondi.")
+            st.error("Errore Amazon. Riprova tra 60 secondi.")
