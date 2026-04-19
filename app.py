@@ -78,28 +78,21 @@ def get_amazon_data(mkt, keyword):
     
     def fetch_with_triple_fallback(p):
         amazon_url = f"https://www.{domain}/s?k={keyword.replace(' ', '+')}&i=stripbooks&page={p}"
-        
-        # 1. ScrapingAnt
         try:
             ant_api = f"https://api.scrapingant.com/v2/general?url={urllib.parse.quote(amazon_url)}&x-api-key={ANT_KEY}&browser=true&proxy_type=residential"
             r = requests.get(ant_api, timeout=30)
             if r.status_code == 200 and "s-search-result" in r.text: return r.text
         except: pass
-        
-        # 2. ScraperAPI
         try:
             scraperapi_url = f"http://api.scraperapi.com?api_key={SCRAPERAPI_KEY}&url={urllib.parse.quote(amazon_url)}&render=true"
             r = requests.get(scraperapi_url, timeout=30)
             if r.status_code == 200 and "s-search-result" in r.text: return r.text
         except: pass
-
-        # 3. WebScraping.ai
         try:
             ws_ai_url = f"https://api.webscraping.ai/html?api_key={WEBSCRAPINGAI_KEY}&url={urllib.parse.quote(amazon_url)}&proxy=residential&js=true"
             r = requests.get(ws_ai_url, timeout=30)
             if r.status_code == 200 and "s-search-result" in r.text: return r.text
         except: pass
-        
         return None
 
     with ThreadPoolExecutor(max_workers=5) as executor:
@@ -109,41 +102,32 @@ def get_amazon_data(mkt, keyword):
     seen = set()
     for html in pages:
         if not html: continue
-        soup = BeautifulSoup(html, 'html.parser')
+        soup = BeautifulSoup(html, 'parser.html' if 'parser.html' in str(BeautifulSoup) else 'html.parser')
         items = soup.find_all('div', {'data-component-type': 's-search-result'})
-        
         for item in items:
             title_el = item.h2
             title = title_el.text.strip() if title_el else ""
             if not title or title in seen: continue
-            
             text = item.get_text(separator=' ').lower()
             bsr_match = re.search(r'n\.\s*([0-9.,]+)\s*in', text) or re.search(r'#([0-9.,]+)\s*in', text)
             bsr = bsr_match.group(1).replace('.', '').replace(',', '') if bsr_match else "N/D"
-            
             is_self = "Sì (Self-Pub)" if any(x in text for x in ['independently', 'kdp', 'indipendente', 'createspace']) else "Tradizionale"
-            
             pw, pf = item.find('span', 'a-price-whole'), item.find('span', 'a-price-fraction')
-            try:
-                price = float(f"{pw.text.replace(',','').replace('.','')}.{pf.text}") if pw and pf else 0.0
+            try: price = float(f"{pw.text.replace(',','').replace('.','')}.{pf.text}") if pw and pf else 0.0
             except: price = 0.0
-            
             if price > 0 or bsr != "N/D":
                 seen.add(title)
                 results.append({"Titolo Analizzato": title, "Prezzo": price, "BSR": bsr, "Editore": is_self})
             if len(results) >= 60: break
-            
     return pd.DataFrame(results)
 
 # ==============================================================================
-# 4. SIDEBAR CON PROMPT STRATEGICO POTENZIATO
+# 4. SIDEBAR CON GENERAZIONE TITOLI/TRAME (ANALISI POSITIVA)
 # ==============================================================================
 with st.sidebar:
     st.title("🛡️ STRATEGY LAB 11.5")
     if st.button("🔄 RESET"):
-        st.session_state.data = None
-        st.session_state.suggestions = None
-        st.session_state.suggested_kws = ""
+        for key in ['data', 'suggestions', 'kw', 'score', 'suggested_kws']: st.session_state[key] = "" if isinstance(st.session_state[key], str) else None
         st.rerun()
     
     st.markdown("---")
@@ -156,13 +140,7 @@ with st.sidebar:
         else:
             with st.spinner("Applicando ragionamento strategico..."):
                 client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                # MODIFICA: Utilizzo degli strumenti di ragionamento KDP professionali
-                prompt_kw = f"""Agisci come un analista KDP esperto utilizzando il framework di profittabilità. 
-                Obiettivo: Trovare 'Gaps' di mercato.
-                Dati: Nicchia: {nicchia}, Genere: {genere}, Target: {target}.
-                Compito: Genera 5 keyword long-tail CHIRURGICHE. 
-                Criteri: Alta intenzione d'acquisto, bassa saturazione, specifiche per risolvere un problema (pain point) o soddisfare un desiderio del target.
-                Rispondi solo con le 5 keyword separate da virgola."""
+                prompt_kw = f"Agisci come analista KDP esperto. Nicchia: {nicchia}, Genere: {genere}, Target: {target}. Genera 5 keyword long-tail CHIRURGICHE. Rispondi solo con le keyword separate da virgola."
                 kw_ai = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt_kw}]).choices[0].message.content
                 st.session_state.suggested_kws = kw_ai
 
@@ -180,21 +158,16 @@ with st.sidebar:
                     indie_r = (len(df[df['Editore'] == "Sì (Self-Pub)"]) / len(df)) * 100
                     st.session_state.score = 40 + (30 if avg_p > 12.5 else 0) + (30 if indie_r > 40 else 0)
                     
+                    # LOGICA DI GENERAZIONE TITOLI/TRAME IN CASO POSITIVO
                     if st.session_state.score >= 60:
                         client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                        # MODIFICA: Prompt di ragionamento avanzato per la stesura
-                        prompt_book = f""" Framework Strategico KDP Positivo rilevato. 
-                        Keyword: '{kw_selezionata}' | Genere: {genere}.
-                        Compito: Genera 3 titoli e 3 trame basate su 'Profitability Formulas'.
-                        Criteri: I titoli devono includere ganci emotivi e benefici chiari. 
-                        Le trame devono descrivere come il libro si differenzia dalla competizione esistente analizzata.
-                        Formato: TITOLO: [testo] | TRAMA: [testo]."""
+                        prompt_book = f"Analisi POSITIVA per '{kw_selezionata}' ({genere}). Genera 3 titoli magnetici e 3 trame specifiche che risolvano i Gaps di mercato per il target '{target}'. Formato: TITOLO: [testo] | TRAMA: [testo]."
                         st.session_state.suggestions = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt_book}]).choices[0].message.content
                     else: st.session_state.suggestions = "NEGATIVE"
                 else: st.error("⚠️ Nessun dato trovato. Riprova.")
 
 # ==============================================================================
-# 5. DASHBOARD
+# 5. DASHBOARD: STAMPA TITOLI E TRAME
 # ==============================================================================
 if st.session_state.data is not None:
     st.markdown(f"<div class='white-title'>Report Chirurgico: {st.session_state.kw.upper()}</div>", unsafe_allow_html=True)
@@ -206,14 +179,21 @@ if st.session_state.data is not None:
     c2.metric("Indie Ratio", f"{int(indie_p)}%")
     c3.metric("Score Nicchia", f"{st.session_state.score}/100")
 
+    # LOGICA DI STAMPA TITOLI E TRAME
     if st.session_state.suggestions == "NEGATIVE":
-        st.error("❌ ANALISI NEGATIVA: In base ai criteri strategici, questa nicchia presenta troppi rischi (basso prezzo medio o alta presenza di Big Publishers). Sconsigliato procedere.")
+        st.error("❌ ANALISI NEGATIVA: Non è profittevole scrivere su quell'argomento. La competizione è troppo alta o la domanda è troppo bassa.")
     elif st.session_state.suggestions:
-        st.success(f"✅ ANALISI POSITIVA! Strategia basata sul framework di profittabilità per '{st.session_state.kw}':")
+        st.success(f"✅ ANALISI POSITIVA! Ecco i titoli e le trame strategiche per '{st.session_state.kw}':")
+        # Splitto i blocchi generati dall'AI
         blocks = st.session_state.suggestions.split("TITOLO:")
         for block in blocks[1:]:
             if "|" in block:
                 parts = block.split("|")
                 title_final = parts[0].strip()
                 plot_final = parts[1].replace('TRAMA:', '').replace('Trama:', '').strip()
-                st.markdown(f'<div class="ebook-card"><div class="ebook-title">📘 {title_final}</div><div class="ebook-plot"><b>Strategia Editoriale:</b> {plot_final}</div></div>', unsafe_allow_html=True)
+                st.markdown(f"""
+                <div class="ebook-card">
+                    <div class="ebook-title">📘 {title_final}</div>
+                    <div class="ebook-plot"><b>Strategia Editoriale:</b> {plot_final}</div>
+                </div>
+                """, unsafe_allow_html=True)
