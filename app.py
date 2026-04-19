@@ -85,7 +85,6 @@ def get_amazon_data(marketplace, keyword, pagine, colore):
         soup = BeautifulSoup(res.text, 'html.parser')
         results = []
         
-        # ORA ESTRAE I PRIMI 15 RISULTATI (invece di 10)
         items = soup.find_all('div', {'data-component-type': 's-search-result'})[:15]
         progress_text = st.empty()
         progress_bar = st.progress(0)
@@ -234,23 +233,36 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # 1. NUOVO SISTEMA COSTRUTTORE KEYWORD
-    st.subheader("1. Costruttore Keyword")
+    # --- NUOVO SISTEMA COSTRUTTORE KEYWORD AUTOMATICO ---
+    st.subheader("1. Generatore Keyword Automatica")
     with st.expander("🛠️ Crea la tua Keyword Strategica", expanded=True):
-        st.caption("Usa la formula: Argomento + Target + Beneficio")
-        argomento = st.text_input("Argomento (es. Dieta, Scacchi):")
-        target = st.text_input("Per chi? (es. Donne, Principianti):")
-        beneficio = st.text_input("Beneficio/Formato (es. Senza stress):")
+        st.caption("Compila i campi per generare varianti profittevoli:")
+        argomento = st.text_input("1. Argomento (es. Dieta, Scacchi):")
+        target = st.text_input("2. Per chi? (es. Donne, Principianti):")
+        beneficio = st.text_input("3. Benefici (es. Senza stress, per dimagrire):")
         
-        # Composizione automatica in tempo reale
-        kw_costruita = f"{argomento} per {target} {beneficio}".strip()
-        if kw_costruita != "per":
-            st.info(f"Copia questa Keyword:\n**{kw_costruita}**")
+        # Generazione solo se l'utente ha iniziato a digitare
+        if argomento or target or beneficio:
+            st.markdown("**💡 Copia una di queste varianti:**")
+            
+            # Variante 1: Formula Standard (Target + Beneficio)
+            kw1 = f"{argomento} per {target} {beneficio}".strip().replace("  ", " ")
+            if kw1 and kw1 != "per":
+                st.code(kw1, language="markdown")
+                
+            # Variante 2: Formula Manuale Pratico
+            kw2 = f"Manuale pratico di {argomento} per {target}".strip().replace("  ", " ")
+            if kw2 and "di per" not in kw2:
+                st.code(kw2, language="markdown")
+                
+            # Variante 3: Formula Focus Beneficio
+            kw3 = f"Come {beneficio} con {argomento}".strip().replace("  ", " ")
+            if kw3 and "Come con" not in kw3:
+                st.code(kw3, language="markdown")
             
     mkt = st.selectbox("Marketplace", ["Italia", "USA", "Spagna", "Francia", "Germania"])
     
-    # Il campo principale dove incollare/scrivere la keyword
-    key = st.text_input("🔍 Inserisci Keyword per l'Analisi")
+    key = st.text_input("🔍 Incolla qui la Keyword per l'Analisi")
     
     st.markdown("---")
     st.subheader("2. Dati Libro (Per Royalty)")
@@ -268,7 +280,6 @@ with st.sidebar:
 
 # --- LOGICA MAIN ---
 if run and key:
-    # Aggiornato avviso tempo (15 libri = 60-90 sec)
     st.info("💡 Attenzione: La scansione profonda per estrarre BSR e Copertine su 15 libri richiede circa 60-90 secondi.")
     with st.spinner("Connessione ai server di Amazon in corso..."):
         df = get_amazon_data(mkt, key, pagine, colore)
