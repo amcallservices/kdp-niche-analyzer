@@ -29,7 +29,8 @@ st.markdown("""
         section[data-testid="stSidebar"] * { color: white !important; }
         
         /* TITOLI RISULTATI: BIANCO */
-        .white-title { color: white !important; font-size: 2.5rem !important; font-weight: 800; margin-bottom: 20px; }
+        .white-title { color: white !important; font-size: 2.5rem !important; font-weight: 800; margin-bottom: 20px; text-align: center; }
+        .program-title { color: #ffd700 !important; font-size: 3rem !important; font-weight: 900; text-align: center; margin-bottom: 40px; text-transform: uppercase; border-bottom: 2px solid #ffd700; padding-bottom: 10px; }
 
         /* CORPO ANALISI: TESTO NERO */
         .stMarkdown p, .stMarkdown li, .stMarkdown span, [data-testid="stMetricLabel"] p { 
@@ -123,6 +124,7 @@ with st.sidebar:
         st.rerun()
     
     st.markdown("---")
+    # Generi inclusi con Test Prep
     genere = st.selectbox("Seleziona Genere", ["Saggio Scientifico", "Quiz Scientifico", "Manuale Tecnico", "Test Prep", "Religioso", "Spirituale", "Meditazione", "Business", "Romanzo Rosa", "Thriller", "Fantasy", "Fantascienza", "Psicologia", "Biografia", "Ricettario"])
     nicchia = st.text_input("Sotto-nicchia specifica")
     target = st.text_input("Target Lettore")
@@ -133,16 +135,17 @@ with st.sidebar:
         else:
             with st.spinner("Generazione..."):
                 client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                prompt_kw = f"Genera 5 keyword long-tail specifiche per KDP. Nicchia: {nicchia}, Genere: {genere}, Target: {target}. Separale con virgola."
+                # Prompt migliorato per keyword specifiche
+                prompt_kw = f"Agisci come esperto SEO Amazon. Genera 5 keyword long-tail CHIRURGICHE e SPECIFICHE per KDP. Nicchia: {nicchia}, Genere: {genere}, Target: {target}. Focalizzati su termini ad alto intento d'acquisto. Separale con virgola."
                 kw_ai = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt_kw}]).choices[0].message.content
                 st.session_state.suggested_kws = kw_ai
 
     if st.session_state.suggested_kws:
-        st.info(f"Suggerite: {st.session_state.suggested_kws}")
+        st.info(f"Keyword Suggerite: {st.session_state.suggested_kws}")
         kw_selezionata = st.text_input("Keyword finale da analizzare:", value=st.session_state.suggested_kws.split(',')[0].strip())
         
         if st.button("🚀 ANALIZZA MERCATO", type="primary"):
-            with st.spinner("Analisi parallela (Almeno 20 libri)..."):
+            with st.spinner("Analisi profonda in corso..."):
                 df = get_amazon_data("Italia", kw_selezionata)
                 
                 if not df.empty:
@@ -156,8 +159,11 @@ with st.sidebar:
                     
                     if score >= 60:
                         client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                        # Prompt reso più rigido per evitare errori di stampa
-                        prompt_book = f"Analisi POSITIVA per la keyword '{kw_selezionata}'. Genera esattamente 3 blocchi composti così: TITOLO: [nome] | TRAMA: [descrizione]. Non aggiungere altro testo."
+                        # PROMPT POTENZIATO PER TITOLI E TRAME ATTINENTI
+                        prompt_book = f"""Agisci come un esperto KDP Publishing Strategist. L'analisi per la keyword '{kw_selezionata}' (Genere: {genere}) è POSITIVA. 
+                        Genera 3 proposte di libri UNICI e SPECIFICI che trattino approfonditamente l'argomento della keyword cercata. 
+                        I titoli devono essere magnetici (Titolo Principale + Sottotitolo descrittivo) e le trame devono spiegare esattamente il valore aggiunto del libro per il lettore target.
+                        Formato obbligatorio: TITOLO: [testo] | TRAMA: [testo]. Non aggiungere altro."""
                         sugg = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt_book}]).choices[0].message.content
                         st.session_state.suggestions = sugg
                     else:
@@ -166,11 +172,15 @@ with st.sidebar:
                     st.error("⚠️ Nessun dato trovato. Prova una keyword meno specifica.")
 
 # ==============================================================================
-# 5. RISULTATI (FIX: STAMPA ROBUSTA DI TITOLI E TRAME)
+# 5. RISULTATI: ANALISI DELLE NICCHIE PROFITTEVOLI
 # ==============================================================================
 if st.session_state.data is not None:
+    # TITOLO DEL PROGRAMMA
+    st.markdown("<div class='program-title'>Analisi delle Nicchie Profittevoli</div>", unsafe_allow_html=True)
+    
     st.markdown(f"<div class='white-title'>Analisi per: {st.session_state.kw.upper()}</div>", unsafe_allow_html=True)
     
+    # Visualizzazione Tabella Dati (Minimo 20 titoli)
     st.dataframe(st.session_state.data, use_container_width=True, hide_index=True)
     
     c1, c2, c3 = st.columns(3)
@@ -180,23 +190,21 @@ if st.session_state.data is not None:
     c3.metric("Score Nicchia", f"{st.session_state.score}/100")
 
     if st.session_state.suggestions == "NEGATIVE":
-        st.warning("⚠️ Score basso (<60). Suggerimenti non generati.")
+        st.warning("⚠️ Score basso (<60). Nicchia troppo competitiva. Suggerimenti non generati.")
     elif st.session_state.suggestions:
-        st.success("✅ ANALISI POSITIVA! Ecco i titoli e le trame consigliate:")
+        st.success(f"✅ ANALISI POSITIVA! Ecco i migliori angoli di attacco per '{st.session_state.kw}':")
         
-        # LOGICA DI STAMPA CORRETTA E ROBUSTA
-        # Splitto usando "TITOLO:" come separatore di blocco
+        # LOGICA DI STAMPA ROBUSTA
         blocks = st.session_state.suggestions.split("TITOLO:")
-        for block in blocks[1:]: # Salto il primo elemento che è vuoto
+        for block in blocks[1:]:
             if "|" in block:
                 parts = block.split("|")
-                # Pulizia sicura dei tag
                 title_final = parts[0].strip()
                 plot_final = parts[1].replace('TRAMA:', '').replace('Trama:', '').strip()
                 
                 st.markdown(f"""
                 <div class="ebook-card">
                     <div class="ebook-title">📘 {title_final}</div>
-                    <div class="ebook-plot"><b>Sinossi:</b> {plot_final}</div>
+                    <div class="ebook-plot"><b>Trame e Strategia di Contenuto:</b> {plot_final}</div>
                 </div>
                 """, unsafe_allow_html=True)
