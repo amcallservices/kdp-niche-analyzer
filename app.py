@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 import time
 import re
 import io
+import urllib.parse
 
 # ==============================================================================
 # 1. CONFIGURAZIONE SUITE ELITE & UI PERSONALIZZATA
@@ -16,304 +17,244 @@ st.set_page_config(
     initial_sidebar_state="expanded" 
 )
 
-# Iniezione CSS per Sidebar Dark, Fissa, Rimozione Menu e Grafica Professionale
+# Iniezione CSS per Sidebar Dark, Fissa e Metriche ad alto contrasto
 st.markdown("""
     <style>
-        /* Nasconde categoricamente il menu nativo di Streamlit e il footer */
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
         header {visibility: hidden;}
-        
-        /* BLOCCA LA SIDEBAR: Impedisce la chiusura e garantisce la visibilità costante */
         [data-testid="collapsedControl"] { display: none !important; }
         
-        /* --- SIDEBAR DARK STYLE --- */
+        /* SIDEBAR DARK */
         section[data-testid="stSidebar"] {
             min-width: 400px !important;
             max-width: 400px !important;
-            background-color: #0f1116 !important; /* Nero profondo */
+            background-color: #0d1117 !important;
             border-right: 1px solid #30363d;
         }
-
-        /* Testi e Label in bianco per massima leggibilità su sfondo Dark */
-        [data-testid="stSidebar"] .stMarkdown p, 
-        [data-testid="stSidebar"] label, 
-        [data-testid="stSidebar"] .stHeader,
-        [data-testid="stSidebar"] h1,
-        [data-testid="stSidebar"] h2,
-        [data-testid="stSidebar"] h3,
-        [data-testid="stSidebar"] .stExpander p {
+        [data-testid="stSidebar"] .stMarkdown p, [data-testid="stSidebar"] label, 
+        [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {
             color: #f0f6fc !important;
         }
-
-        /* Styling degli input all'interno della Sidebar */
         [data-testid="stSidebar"] input {
             background-color: #161b22 !important;
-            color: #c9d1d9 !important;
+            color: #ffffff !important;
             border: 1px solid #30363d !important;
         }
 
-        /* --- MAIN DASHBOARD STYLE --- */
-        [data-testid="stMetricValue"] { color: #1f2328 !important; font-size: 2.2rem !important; font-weight: 800 !important; }
-        [data-testid="stMetricLabel"] { color: #656d76 !important; font-size: 1.1rem !important; }
+        /* METRICHE */
         .stMetric {
             background-color: #ffffff !important;
             border: 1px solid #d0d7de !important;
-            border-left: 8px solid #f78166 !important; /* Arancione KDP */
-            padding: 24px !important;
+            border-left: 8px solid #f78166 !important;
+            padding: 20px !important;
             border-radius: 12px !important;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08) !important;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05) !important;
         }
+        [data-testid="stMetricValue"] { color: #1f2328 !important; font-weight: 800 !important; }
 
-        /* Box Keyword Strategiche generate */
-        .kw-container {
+        /* BOX STRATEGICI */
+        .strategy-card {
             background-color: #f6f8fa;
-            border-radius: 12px;
-            padding: 18px;
-            margin-bottom: 16px;
+            border-radius: 10px;
+            padding: 15px;
             border: 1px solid #d0d7de;
-            border-left: 5px solid #0969da;
+            margin-bottom: 10px;
         }
-        .kw-title { color: #0969da !important; font-weight: bold; font-size: 1.2rem; display: block; margin-bottom: 8px; }
-        .kw-desc { color: #24292f !important; font-size: 0.95rem; line-height: 1.5; }
+        .highlight { color: #0969da; font-weight: bold; }
     </style>
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 2. MOTORE DI INTELLIGENZA EDITORIALE (BRAIN)
+# 2. LOGICA DI BUSINESS (GRATUITA & API-LESS)
 # ==============================================================================
 API_KEY = "ce57dc2330590954355f5c12171c7ce9"
 
-class KDPBrain:
-    """Modelli matematici basati sulle metriche Amazon KDP 2026."""
+class KDPFreeTools:
+    """Strumenti di analisi gratuita senza API aggiuntive."""
     
     @staticmethod
-    def estimate_sales(bsr):
-        """Traduzione algoritmica del BSR in volume di vendite mensili."""
-        if bsr <= 0: return 0
-        if bsr <= 1000: return 750
-        if bsr <= 5000: return 250
-        if bsr <= 15000: return 110
-        if bsr <= 40000: return 45
-        if bsr <= 90000: return 15
-        if bsr <= 200000: return 5
-        return 1
-
-    @staticmethod
-    def calculate_margin(price, pages, is_color):
-        """Calcolo del profitto netto post-royalty e costi di stampa (Amazon EU)."""
-        if price <= 0: return 0.0
-        # Formula stimata per il mercato 2026
-        if not is_color:
-            print_cost = 2.15 if pages <= 108 else 0.60 + (pages * 0.012)
-        else:
-            print_cost = 0.60 + (pages * 0.045)
-            if print_cost < 2.25: print_cost = 2.25
+    def get_amazon_suggestions(keyword, mkt_code):
+        """Simula Publisher Rocket: estrae i suggerimenti reali di Amazon Autocomplete."""
+        mkt_map = {"Italia": "it", "USA": "com", "Spagna": "es", "Francia": "fr", "Germania": "de"}
+        suffix = mkt_map.get(mkt_code, "it")
+        url = f"https://completion.amazon.com/api/2017/suggestions?limit=10&prefix={urllib.parse.quote(keyword)}&alias=stripbooks&mid=ATVPDKIKX0DER"
+        if suffix == "it": url = url.replace("com", "it").replace("ATVPDKIKX0DER", "APJ6JRA9NG5V4")
         
-        # Amazon trattiene il 40% sul cartaceo (Royalty 60%)
-        margin = (price * 0.60) - print_cost
-        return round(margin, 2) if margin > 0 else 0.0
+        try:
+            r = requests.get(url)
+            if r.status_code == 200:
+                return [s['value'] for s in r.json()['suggestions']]
+        except: return []
+        return []
 
     @staticmethod
-    def compute_opportunity_score(avg_p, avg_rev, avg_bsr, self_ratio):
-        """Score finale di validazione della nicchia (0-100)."""
-        score = 45
-        if avg_p >= 14.90: score += 15
-        if avg_rev < 250: score += 20
-        elif avg_rev > 1500: score -= 35
-        if 5000 < avg_bsr < 75000: score += 25
-        if self_ratio > 45: score += 15
-        return max(0, min(100, score))
+    def get_google_trends_link(keyword):
+        """Genera link gratuito a Google Trends."""
+        encoded = urllib.parse.quote(keyword)
+        return f"https://trends.google.it/trends/explore?q={encoded}&date=today%2012-m"
+
+class KDPBrain:
+    @staticmethod
+    def estimate_sales(bsr):
+        if bsr <= 0: return 0
+        if bsr <= 1500: return 500
+        if bsr <= 10000: return 180
+        if bsr <= 50000: return 40
+        if bsr <= 100000: return 12
+        return 2
+
+    @staticmethod
+    def calculate_royalty(price, pages, is_color):
+        if price <= 0: return 0.0
+        cost = 2.15 if not is_color else 0.60 + (pages * 0.045)
+        if pages > 108 and not is_color: cost = 0.60 + (pages * 0.012)
+        royalty = (price * 0.60) - cost
+        return round(royalty, 2) if royalty > 0 else 0.0
 
 # ==============================================================================
-# 3. SCRAPER CATEGORICO (CATEGORICALLY BOOKS & EBOOKS)
+# 3. CORE SCRAPER (FOCALIZZATO LIBRI)
 # ==============================================================================
-def get_exclusive_book_data(mkt, keyword, user_pages, user_color):
-    """Estrae dati esclusivamente dal database Libri ed Ebook di Amazon."""
+def scrape_amazon_elite(mkt, keyword, pages, color_mode):
     domains = {"Italia": "amazon.it", "USA": "amazon.com", "Spagna": "amazon.es", "Francia": "amazon.fr", "Germania": "amazon.de"}
     domain = domains.get(mkt, "amazon.it")
     country = 'it' if mkt == "Italia" else 'us'
     
-    # PARAMETRO CATEGORICO: '&i=stripbooks' forza la ricerca nel dipartimento Libri
-    search_url = f"https://www.{domain}/s?k={keyword.replace(' ', '+')}&i=stripbooks"
+    # &i=stripbooks garantisce solo Libri ed Ebook
+    url = f"https://www.{domain}/s?k={keyword.replace(' ', '+')}&i=stripbooks"
     
     try:
-        res = requests.get('http://api.scraperapi.com', params={'api_key': API_KEY, 'url': search_url, 'render': 'true', 'country_code': country})
+        res = requests.get('http://api.scraperapi.com', params={'api_key': API_KEY, 'url': url, 'render': 'true', 'country_code': country})
         if res.status_code != 200: return None
         
         soup = BeautifulSoup(res.text, 'html.parser')
         items = soup.find_all('div', {'data-component-type': 's-search-result'})[:15]
         
-        results_list = []
-        progress = st.progress(0)
-        status = st.empty()
+        data = []
+        p_bar = st.progress(0)
         
         for i, item in enumerate(items):
-            title = item.h2.text.strip() if item.h2 else "Titolo Ignoto"
-            status.info(f"🔍 Scansione Libri: {i+1}/15 | {title[:40]}...")
+            title = item.h2.text.strip() if item.h2 else "N/A"
+            img = item.find('img', class_='s-image')['src'] if item.find('img', class_='s-image') else ""
             
-            img_src = item.find('img', class_='s-image')['src'] if item.find('img', class_='s-image') else ""
-            
-            # Parsing Prezzo
             p_w = item.find('span', 'a-price-whole')
             p_f = item.find('span', 'a-price-fraction')
             price = float(f"{p_w.text.replace(',','').replace('.','')}.{p_f.text}") if p_w and p_f else 0.0
             
-            # Parsing Recensioni
             rev_tag = item.find('span', {'class': 'a-size-base s-underline-text'})
             reviews = int(re.sub(r'\D', '', rev_tag.text)) if rev_tag else 0
             
-            # DEEP SCAN: Apertura pagina prodotto per BSR ed Editore
             bsr = 0
-            is_self_pub = False
+            is_self = False
             link_tag = item.find('a', class_='a-link-normal s-no-outline')
-            
             if link_tag:
-                full_link = f"https://www.{domain}" + link_tag['href']
-                res_p = requests.get('http://api.scraperapi.com', params={'api_key': API_KEY, 'url': full_link, 'country_code': country})
+                p_url = f"https://www.{domain}" + link_tag['href']
+                # Deep scan per BSR ed Editore
+                res_p = requests.get('http://api.scraperapi.com', params={'api_key': API_KEY, 'url': p_url, 'country_code': country})
                 if res_p.status_code == 200:
-                    p_soup = BeautifulSoup(res_p.text, 'html.parser').get_text().lower()
-                    # Ricerca BSR nel database Libri
-                    bsr_match = re.search(r'(?:n\.|#)\s*([0-9.,]+)\s*in', p_soup)
-                    if bsr_match: bsr = int(bsr_match.group(1).replace('.', '').replace(',', ''))
-                    # Verifica Editore Indipendente
-                    is_self_pub = any(x in p_soup for x in ["indipendentemente pubblicato", "independently published", "kdp"])
+                    ps = BeautifulSoup(res_p.text, 'html.parser').get_text().lower()
+                    m = re.search(r'(?:n\.|#)\s*([0-9.,]+)\s*in', ps)
+                    if m: bsr = int(m.group(1).replace('.', '').replace(',', ''))
+                    is_self = any(x in ps for x in ["indipendentemente pubblicato", "independently published", "kdp"])
 
-            royalty_val = KDPBrain.calculate_margin(price, user_pages, user_color == "A Colori")
-            est_sales = KDPBrain.estimate_sales(bsr)
+            roy = KDPBrain.calculate_royalty(price, pages, color_mode == "A Colori")
+            sales = KDPBrain.estimate_sales(bsr)
             
-            results_list.append({
-                "Copertina": img_src,
-                "Libro": title,
-                "Prezzo": price,
-                "Royalty Netta": f"{royalty_val} €",
-                "Recensioni": reviews,
-                "BSR Reale": bsr if bsr > 0 else "N/D",
-                "Vendite Est.": est_sales,
-                "Profitto Stimato": f"{round(est_sales * royalty_val, 2)} €",
-                "Self-Pub": "Sì" if is_self_pub else "No"
+            data.append({
+                "Copertina": img, "Titolo": title, "Prezzo": price, 
+                "Royalty Netta": f"{roy} €", "Recensioni": reviews, 
+                "BSR": bsr if bsr > 0 else "N/D", "Vendite Est.": sales,
+                "Profitto": f"{round(sales * roy, 2)} €", "Self-Pub": "Sì" if is_self else "No"
             })
-            progress.progress((i + 1) / len(items))
+            p_bar.progress((i + 1) / len(items))
             
-        status.empty()
-        progress.empty()
-        return pd.DataFrame(results_list)
-    except Exception as e:
-        st.error(f"Errore Scraper: {e}")
-        return None
+        return pd.DataFrame(data)
+    except: return None
 
 # ==============================================================================
-# 4. SIDEBAR DARK & FISSA (STRATEGIC PANEL)
+# 4. SIDEBAR STRATEGICA (DARK & FISSA)
 # ==============================================================================
-if 'target_kw' not in st.session_state:
-    st.session_state['target_kw'] = ""
+if 'kw' not in st.session_state: st.session_state['kw'] = ""
 
 with st.sidebar:
     st.title("🛡️ KDP STRATEGY HUB")
-    st.caption("Analisi Esclusiva Libri ed Ebook")
-    
-    if st.button("🔄 NUOVA SESSIONE", use_container_width=True):
-        st.session_state['target_kw'] = ""
-        st.rerun()
+    if st.button("🔄 NUOVA ANALISI", use_container_width=True):
+        st.session_state['kw'] = ""; st.rerun()
 
     st.markdown("---")
-    
-    # GENERATORE DI KEYWORD STRATEGICA (Formula di Marketing)
     st.subheader("🛠️ Ingegneria della Keyword")
-    with st.expander("Generatore Pro (Target + Beneficio)", expanded=True):
-        t_topic = st.text_input("Argomento:", placeholder="es. Yoga")
-        t_target = st.text_input("Target:", placeholder="es. Donne over 60")
-        t_benefit = st.text_input("Beneficio:", placeholder="es. mobilità articolare")
-        
-        if t_topic and t_target and t_benefit:
-            st.caption("Seleziona il modello di vendita:")
-            # Modello 1: Risultato Diretto
-            k1 = f"{t_topic} per {t_target}: {t_benefit}"
-            if st.button(f"🎯 Strategia Risultato: {k1}", use_container_width=True):
-                st.session_state['target_kw'] = k1
-                st.rerun()
-            # Modello 2: Metodo/Workbook
-            k2 = f"Esercizi di {t_topic} per {t_target} per {t_benefit}"
-            if st.button(f"📦 Strategia Metodo: {k2}", use_container_width=True):
-                st.session_state['target_kw'] = k2
-                st.rerun()
+    with st.expander("Generatore Strategico", expanded=True):
+        arg = st.text_input("Argomento:", placeholder="es. Yoga")
+        pub = st.text_input("Target:", placeholder="es. Anziani")
+        ben = st.text_input("Beneficio:", placeholder="es. flessibilità")
+        if arg and pub and ben:
+            k1 = f"{arg} per {pub}: {ben}"
+            if st.button(f"🎯 Usa: {k1}"): st.session_state['kw'] = k1; st.rerun()
+            k2 = f"Manuale di {arg} per {pub} per {ben}"
+            if st.button(f"📦 Usa: {k2}"): st.session_state['kw'] = k2; st.rerun()
 
     st.markdown("---")
+    mkt = st.selectbox("Marketplace", ["Italia", "USA", "Spagna", "Francia", "Germania"])
+    query = st.text_input("🔍 Keyword Analisi", value=st.session_state['kw'])
     
-    st.subheader("⚙️ Parametri Analisi")
-    mkt_sel = st.selectbox("Marketplace Amazon", ["Italia", "USA", "Spagna", "Francia", "Germania"])
-    final_query = st.text_input("🔍 Keyword sotto Analisi", value=st.session_state['target_kw'])
-    
-    st.caption("Dati per calcolo Royalty:")
-    num_pagine = st.number_input("Pagine del libro", min_value=24, max_value=800, value=120)
-    tipo_stampa = st.selectbox("Interno", ["Bianco e Nero", "A Colori"])
-    
+    # SUGGERIMENTI GRATUITI (LIVE)
+    if query:
+        with st.expander("💡 Suggerimenti Autocomplete (Gratis)"):
+            suggs = KDPFreeTools.get_amazon_data_suggestions(query, mkt) if 'query' in locals() else []
+            for s in suggs:
+                if st.button(f"🔎 {s}", key=s):
+                    st.session_state['kw'] = s; st.rerun()
+
     st.markdown("---")
-    lancia_analisi = st.button("AVVIA DEEP SCAN LIBRI", type="primary", use_container_width=True)
+    pgs = st.number_input("Pagine", min_value=24, value=120)
+    stampa = st.selectbox("Stampa", ["Bianco e Nero", "A Colori"])
+    
+    run = st.button("AVVIA DEEP SCAN", type="primary", use_container_width=True)
 
 # ==============================================================================
-# 5. MAIN DASHBOARD (REPORT PROFESSIONALE)
+# 5. DASHBOARD RISULTATI
 # ==============================================================================
-if lancia_analisi and final_query:
-    st.header(f"📊 Report Analisi Editoriale: {final_query.upper()}")
+if run and query:
+    st.header(f"📊 Business Intelligence: {query.upper()}")
     
-    with st.spinner("Scansione categorica in corso... (Esclusione altri prodotti)"):
-        data_df = get_exclusive_book_data(mkt_sel, final_query, num_pagine, tipo_stampa)
+    # Link a Google Trends (Gratis)
+    trends_url = KDPFreeTools.get_google_trends_link(query)
+    st.markdown(f"🔗 [Apri Analisi Trend su Google (Gratis)]({trends_url})")
+
+    with st.spinner("Scansione editoriale in corso..."):
+        df = scrape_amazon_elite(mkt, query, pgs, stampa)
         
-        if data_df is not None and not data_df.empty:
-            st.success("Analisi completata! Database focalizzato esclusivamente su Libri ed Ebook.")
+        if df is not None and not df.empty:
+            st.dataframe(df, column_config={"Copertina": st.column_config.ImageColumn("Cover")}, use_container_width=True, hide_index=True)
             
-            # Tabella Risultati
-            st.dataframe(
-                data_df,
-                column_config={"Copertina": st.column_config.ImageColumn("Cover", width="small")},
-                use_container_width=True,
-                hide_index=True
-            )
-            
-            # Conversione dati per metriche
-            data_df['Profitto_Num'] = data_df['Profitto Stimato'].str.replace(' €', '').astype(float)
-            data_df['Royalty_Num'] = data_df['Royalty Netta'].str.replace(' €', '').astype(float)
-            avg_p = data_df['Prezzo'].mean()
-            avg_r = data_df['Royalty_Num'].mean()
-            total_pot = data_df['Profitto_Num'].sum()
-            s_ratio = (len(data_df[data_df["Self-Pub"] == "Sì"]) / len(data_df)) * 100
-            valid_bsrs = pd.to_numeric(data_df[data_df['BSR Reale'] != 'N/D']['BSR Reale']).mean() if not data_df[data_df['BSR Reale'] != 'N/D'].empty else 0
-            
-            o_score = KDPBrain.compute_opportunity_score(avg_p, data_df['Recensioni'].mean(), valid_bsrs, s_ratio)
+            # Calcolo Metriche
+            df['Profit_N'] = df['Profitto'].str.replace(' €', '').astype(float)
+            df['Royalty_N'] = df['Royalty Netta'].str.replace(' €', '').astype(float)
+            avg_p = df['Prezzo'].mean()
+            avg_r = df['Royalty_N'].mean()
+            s_ratio = (len(df[df["Self-Pub"] == "Sì"]) / len(df)) * 100
             
             st.markdown("---")
-            st.subheader("🏁 Verdetto di Business KDP")
-            m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Prezzo Medio Pagina", f"{avg_p:.2f} €")
-            m2.metric("Royalty Media Netta", f"{avg_r:.2f} €")
-            m3.metric("Self-Pub Ratio", f"{int(s_ratio)}%")
-            m4.metric("Opportunity Score", f"{int(o_score)}/100")
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Prezzo Medio", f"{avg_p:.2f} €")
+            c2.metric("Royalty Media", f"{avg_r:.2f} €")
+            c3.metric("Self-Pub Ratio", f"{int(s_ratio)}%")
             
+            # Sostenibilità ADS (Funzione Gratis)
+            ads_check = "SÌ" if avg_r > 3.50 else "NO"
+            c4.metric("Sostenibilità ADS", ads_check, help="Se la royalty è sotto i 3.50€, fare Ads è molto rischioso.")
+
             st.markdown("---")
-            
             col_l, col_r = st.columns(2)
             with col_l:
-                st.subheader("📝 Validazione Strategica")
-                if o_score >= 70:
-                    st.success("**🟢 NICCHIA VALIDATA**: Mercato profittevole con barriere d'ingresso gestibili. Consigliata la pubblicazione immediata.")
-                elif avg_p < 12:
-                    st.error("**🔴 MARGINI TROPPO BASSI**: I prezzi medi non giustificano l'investimento in Amazon Ads. Punta a un Bundle per alzare il valore.")
-                elif s_ratio < 25:
-                    st.warning("**🟡 DOMINIO CASE EDITRICI**: La pagina è in mano a grandi editori. Difficile posizionarsi organicamente.")
+                st.subheader("📝 Verdetto di Fattibilità")
+                if s_ratio > 40 and avg_p > 12.90:
+                    st.success("✅ **NICCHIA VALIDATA**: Alta presenza di Self-Publisher e margini sani per le Ads.")
                 else:
-                    st.info("**🔵 ANALISI NECESSARIA**: La nicchia è bilanciata. Richiede un posizionamento molto specifico per emergere.")
+                    st.warning("⚠️ **ATTENZIONE**: Nicchia dominata da grandi brand o margini troppo bassi.")
 
             with col_r:
-                st.subheader("💡 Strategie di Espansione")
-                kw_l = final_query.lower()
-                st.markdown(f"<div class='kw-container'><span class='kw-title'>Espansione Manuale</span><span class='kw-desc'>Crea una guida 'passo-passo' dedicata a {kw_l} per massimizzare la conversione organica.</span></div>", unsafe_allow_html=True)
-                st.info(f"Prova anche queste keyword: \n1. {kw_l} per principianti assoluti\n2. {kw_l} rapido ed efficace")
-
+                st.subheader("🧠 Suggerimento Strategico")
+                st.info(f"Punta su un titolo che includa '{query}' e aggiungi un sottotitolo focalizzato sul 'Beneficio' inserito nella sidebar.")
         else:
-            st.error("Amazon ha limitato la scansione. Attendi 60 secondi prima di una nuova ricerca.")
-else:
-    # Pagina Welcome
-    st.title("Benvenuto nel KDP Analyzer Elite")
-    st.write("Configura la tua ricerca nella sidebar scura a sinistra per iniziare l'analisi professionale.")
-    st.image("https://m.media-amazon.com/images/G/01/mobile-apps/dex/app-submission/kdp_logo._CB485935043_.png", width=180)
+            st.error("Errore di connessione. Riprova tra un minuto.")
