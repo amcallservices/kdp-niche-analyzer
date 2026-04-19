@@ -104,7 +104,7 @@ def get_amazon_data(mkt, keyword):
     return pd.DataFrame(results)
 
 # ==============================================================================
-# 4. SIDEBAR (14 GENERI)
+# 4. SIDEBAR (15 GENERI)
 # ==============================================================================
 with st.sidebar:
     st.title("🛡️ STRATEGY LAB 11.1")
@@ -114,7 +114,8 @@ with st.sidebar:
         st.rerun()
     
     st.markdown("---")
-    genere = st.selectbox("Seleziona Genere", ["Saggio Scientifico", "Quiz Scientifico", "Manuale Tecnico", "Religioso", "Spirituale", "Meditazione", "Business", "Romanzo Rosa", "Thriller", "Fantasy", "Fantascienza", "Psicologia", "Biografia", "Ricettario"])
+    # AGGIUNTO "Test Prep" ALLA LISTA SOTTOSTANTE
+    genere = st.selectbox("Seleziona Genere", ["Saggio Scientifico", "Quiz Scientifico", "Manuale Tecnico", "Test Prep", "Religioso", "Spirituale", "Meditazione", "Business", "Romanzo Rosa", "Thriller", "Fantasy", "Fantascienza", "Psicologia", "Biografia", "Ricettario"])
     nicchia = st.text_input("Sotto-nicchia specifica")
     target = st.text_input("Target Lettore")
     
