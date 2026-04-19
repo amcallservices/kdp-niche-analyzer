@@ -13,7 +13,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 2. CSS per UI Professionale e RIMOZIONE MENU IN ALTO A DESTRA
+# 2. CSS per UI Professionale e RIMOZIONE MENU IN ALTO A DESTRA + SIDEBAR FISSA
 st.markdown("""
     <style>
         /* Nasconde il menu in alto a destra (hamburger menu) e il footer */
@@ -21,8 +21,15 @@ st.markdown("""
         footer {visibility: hidden;}
         header {visibility: hidden;}
         
-        /* Forza la sidebar a restare aperta */
-        [data-testid="collapsedControl"] { display: none; }
+        /* BLOCCA LA SIDEBAR: Nasconde il pulsante per chiuderla/comprimerla */
+        [data-testid="collapsedControl"] {
+            display: none !important;
+        }
+
+        /* Opzionale: Rimuove il margine superiore per un look più pulito */
+        .block-container {
+            padding-top: 1rem;
+        }
         
         /* Stile Metriche */
         .stMetric { 
@@ -84,7 +91,8 @@ def get_amazon_data(marketplace, keyword, pagine, colore):
     domain = domains.get(marketplace, "amazon.it")
     country = 'it' if marketplace == "Italia" else 'us'
     
-    # CARATTERISTICA AGGIUNTA: Forza la ricerca esclusivamente nella categoria Libri (i=stripbooks)
+    # CARATTERISTICA RICHIESTA: Forza la ricerca esclusivamente nella categoria Libri (i=stripbooks)
+    # Questo parametro impedisce ad Amazon di mostrare altri prodotti non editoriali.
     target_url = f"https://www.{domain}/s?k={keyword.replace(' ', '+')}&i=stripbooks"
     
     try:
@@ -174,7 +182,7 @@ with st.sidebar:
 
 # --- LOGICA MAIN ---
 if run and key_input:
-    with st.spinner("Esecuzione Niche Engineering (Solo Libri ed Ebook)..."):
+    with st.spinner("Analisi esclusiva su Libri ed Ebook in corso..."):
         df = get_amazon_data(mkt, key_input, pagine, colore)
         if df is not None:
             st.success("Dati Ricevuti!")
@@ -213,4 +221,4 @@ if run and key_input:
                 st.markdown(f"<div class='keyword-box'><b>Versione Strategica:</b> {kw} per principianti</div>", unsafe_allow_html=True)
                 st.markdown(f"<div class='keyword-box'><b>Versione Premium:</b> Manuale definitivo di {kw}</div>", unsafe_allow_html=True)
         else:
-            st.error("Errore di connessione. Amazon ha limitato la richiesta, riprova tra 60 secondi.")
+            st.error("Errore di connessione o superamento limiti. Riprova tra 60 secondi.")
