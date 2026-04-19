@@ -88,7 +88,8 @@ def get_amazon_data(mkt, keyword):
         return None
 
     with ThreadPoolExecutor(max_workers=5) as executor:
-        pages = list(executor.map(fetch_with_triple_fallback, range(1, 8)))
+        # FIX: Aumentato il range a 11 (scansiona le prime 10 pagine invece di 7)
+        pages = list(executor.map(fetch_with_triple_fallback, range(1, 11)))
     
     results, seen = [], set()
     for html in pages:
@@ -110,7 +111,9 @@ def get_amazon_data(mkt, keyword):
                 except: price = 0.0
             seen.add(title)
             results.append({"Titolo Analizzato": title, "Prezzo": price, "BSR": bsr, "Editore": is_self})
-            if len(results) >= 60: break
+            
+            # FIX: Aumentato il limite di libri catturati da 60 a 100
+            if len(results) >= 100: break
     return pd.DataFrame(results)
 
 # ==============================================================================
