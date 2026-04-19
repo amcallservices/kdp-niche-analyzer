@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 # ==============================================================================
 # 1. DESIGN SYSTEM: CONTRASTO BIANCO/NERO & RIMOZIONE MENU
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 11.9", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 11.9.1", page_icon="🛡️", layout="wide")
 
 st.markdown("""
     <style>
@@ -114,10 +114,10 @@ def get_amazon_data(mkt, keyword):
     return pd.DataFrame(results)
 
 # ==============================================================================
-# 4. SIDEBAR CON GENERAZIONE SILENZIOSA (SOLO KEYWORD)
+# 4. SIDEBAR CON GENERAZIONE SILENZIOSA E PROMPT BLINDATO
 # ==============================================================================
 with st.sidebar:
-    st.title("🛡️ STRATEGY LAB 11.9")
+    st.title("🛡️ STRATEGY LAB 11.9.1")
     if st.button("🔄 RESET"):
         st.session_state.data, st.session_state.suggestions, st.session_state.suggested_kws = None, None, ""
         st.rerun()
@@ -132,7 +132,6 @@ with st.sidebar:
         else:
             with st.spinner("Estrazione keyword..."):
                 client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                # PROMPT BLINDATO: Solo keyword, nessun commento.
                 prompt_kw = (
                     f"Agisci come esperto SEO Amazon. Nicchia: {nicchia}, Genere: {genere}, Target: {target}. "
                     "Genera 5 keyword long-tail specifiche separate da virgola. "
@@ -156,13 +155,14 @@ with st.sidebar:
                     
                     if st.session_state.score >= 60:
                         client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                        prompt_book = f"Analisi POSITIVA per '{kw_selezionata}' ({genere}) per il target '{target}'. Genera 3 libri. Formato OBBLIGATORIO: [BLOCK] TITOLO: [testo] | TRAMA: [testo]."
+                        # PROMPT SEMPLIFICATO E A PROVA DI ERRORE
+                        prompt_book = f"Analisi POSITIVA per '{kw_selezionata}' ({genere}) per il target '{target}'. Genera 3 idee per libri attinenti. Formato TASSATIVO:\nTITOLO: [testo]\nTRAMA: [testo]\n---"
                         st.session_state.suggestions = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt_book}]).choices[0].message.content
                     else: st.session_state.suggestions = "NEGATIVE"
                 else: st.error("⚠️ Nessun dato trovato. Riprova.")
 
 # ==============================================================================
-# 5. DASHBOARD: RENDERING E STAMPA RISULTATI
+# 5. DASHBOARD: RENDERING E STAMPA RISULTATI (PARSER REGEX INFALLIBILE)
 # ==============================================================================
 if st.session_state.data is not None:
     st.markdown(f"<div class='white-title'>Report Chirurgico: {st.session_state.kw.upper()}</div>", unsafe_allow_html=True)
@@ -178,15 +178,22 @@ if st.session_state.data is not None:
         st.error(f"❌ ANALISI NEGATIVA: La keyword '{st.session_state.kw}' non è profittevole secondo i criteri strategici.")
     elif st.session_state.suggestions:
         st.success(f"✅ ANALISI POSITIVA! Ecco i titoli e le trame per '{st.session_state.kw}':")
-        items = st.session_state.suggestions.split("[BLOCK]")
-        for item in items:
-            if "|" in item and "TITOLO" in item.upper():
-                parts = item.split("|")
-                t_clean = parts[0].replace("TITOLO:", "").replace("Titolo:", "").strip()
-                p_clean = parts[1].replace("TRAMA:", "").replace("Trama:", "").strip()
+        
+        # FIX: Puliamo il testo da eventuali grassetti markdown (**) generati dall'AI
+        clean_suggestions = st.session_state.suggestions.replace("**", "")
+        
+        # FIX: Regex infallibile che cattura tutto quello che c'è tra "TITOLO:" e "TRAMA:"
+        matches = re.findall(r'TITOLO:\s*(.*?)\s*TRAMA:\s*(.*?)(?=\nTITOLO:|\n---|---|$)', clean_suggestions, re.IGNORECASE | re.DOTALL)
+        
+        if matches:
+            for t_clean, p_clean in matches:
                 st.markdown(f"""
                 <div class="ebook-card">
-                    <div class="ebook-title">📘 {t_clean}</div>
-                    <div class="ebook-plot"><b>Strategia Editoriale:</b> {p_clean}</div>
+                    <div class="ebook-title">📘 {t_clean.strip()}</div>
+                    <div class="ebook-plot"><b>Strategia Editoriale:</b> {p_clean.strip()}</div>
                 </div>
                 """, unsafe_allow_html=True)
+        else:
+            # Fallback visivo se l'IA risponde in un formato completamente alieno
+            st.warning("⚠️ L'Intelligenza Artificiale ha generato i suggerimenti ma in un formato anomalo. Ecco il testo grezzo:")
+            st.write(st.session_state.suggestions)
