@@ -7,14 +7,30 @@ import re
 import openai
 
 # ==============================================================================
-# 1. DESIGN SYSTEM ELITE (MASTER DARK & HIGH CONTRAST)
+# 1. DESIGN SYSTEM ELITE (SIDEBAR FISSA & DARK MODE)
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 7.4", page_icon="🛡️", layout="wide")
+st.set_page_config(
+    page_title="KDP OMNI-REASONER 7.5", 
+    page_icon="🛡️", 
+    layout="wide",
+    initial_sidebar_state="expanded" # Forza l'espansione all'avvio
+)
 
 st.markdown("""
     <style>
+        /* DISATTIVA IL PULSANTE PER CHIUDERE LA SIDEBAR */
+        [data-testid="collapsedControl"] {
+            display: none !important;
+        }
+        
         #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
-        section[data-testid="stSidebar"] { background-color: #0d1117 !important; border-right: 1px solid #30363d; }
+        
+        /* STILE SIDEBAR FISSA */
+        section[data-testid="stSidebar"] { 
+            background-color: #0d1117 !important; 
+            border-right: 1px solid #30363d;
+            min-width: 450px !important;
+        }
 
         /* METRICHE */
         [data-testid="stMetricValue"] { color: #238636 !important; font-weight: 800 !important; }
@@ -42,29 +58,29 @@ try:
     client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
     API_READY = True
 except:
-    st.error("⚠️ Configurazione OpenAI mancante.")
+    st.error("⚠️ Configurazione OpenAI mancante nei Secret.")
     API_READY = False
 
 if 'results_df' not in st.session_state: st.session_state.results_df = None
 if 'ebook_ideas' not in st.session_state: st.session_state.ebook_ideas = ""
 
 # ==============================================================================
-# 3. MOTORE DI SCAN (DEDUPLICAZIONE RIGIDA)
+# 3. MOTORE DI SCAN (100 LIBRI UNICI)
 # ==============================================================================
-def run_unique_centurion_scan(mkt, keyword, pgs_est):
+def run_unique_centurion_scan(mkt, keyword):
     domains = {"Italia": "amazon.it", "USA": "amazon.com", "Spagna": "amazon.es", "Francia": "amazon.fr", "Germania": "amazon.de"}
     domain = domains.get(mkt, "amazon.it")
     
     unique_results = []
-    seen_titles = set() # Set per il controllo duplicati istantaneo
+    seen_titles = set()
     
     p_bar = st.progress(0)
     status_text = st.empty()
     
-    for page in range(1, 15): # Aumentato il range pagine per compensare i duplicati rimossi
+    for page in range(1, 15): 
         if len(unique_results) >= 100: break
         
-        status_text.text(f"Scansione Pagina {page}... Libri unici trovati: {len(unique_results)}/100")
+        status_text.text(f"Scansione Pagina {page}... Libri unici: {len(unique_results)}/100")
         target_url = f"https://www.{domain}/s?k={keyword.replace(' ', '+')}&i=stripbooks&page={page}"
         api_url = f"https://api.scrapingant.com/v2/general?url={urllib.parse.quote(target_url)}&x-api-key={ANT_API_KEY}&browser=false&proxy_type=residential"
         
@@ -74,15 +90,12 @@ def run_unique_centurion_scan(mkt, keyword, pgs_est):
             items = soup.find_all('div', {'data-component-type': 's-search-result'})
             
             for item in items:
-                # 1. Filtro Categoria
                 item_text = item.get_text().lower()
                 if not any(x in item_text for x in ['pagine', 'kindle', 'copertina', 'formato']): continue
                 
-                # 2. Controllo Duplicati
                 title_elem = item.h2.text.strip() if item.h2 else "N/A"
                 if title_elem in seen_titles or title_elem == "N/A": continue
                 
-                # 3. Estrazione Dati
                 seen_titles.add(title_elem)
                 img = item.find('img', class_='s-image')['src'] if item.find('img', class_='s-image') else ""
                 
@@ -97,7 +110,6 @@ def run_unique_centurion_scan(mkt, keyword, pgs_est):
                     "Preview": img, "Titolo": title_elem, "Prezzo": price, 
                     "BSR": bsr, "Self": "Sì" if "independently" in item_text else "No"
                 })
-                
                 if len(unique_results) >= 100: break
             
             p_bar.progress(len(unique_results) / 100)
@@ -108,21 +120,25 @@ def run_unique_centurion_scan(mkt, keyword, pgs_est):
     return pd.DataFrame(unique_results)
 
 # ==============================================================================
-# 4. SIDEBAR & AI LOGIC
+# 4. SIDEBAR FISSA (COMMAND CENTER)
 # ==============================================================================
 with st.sidebar:
-    st.title("🛡️ UNIQUE STRATEGY 7.4")
+    st.title("🛡️ STRATEGY LAB 7.5")
+    st.caption("Sidebar Blindata - Solo Libri Unici")
+    
     if st.button("🔄 RESET"):
-        for key in ['results_df', 'ebook_ideas']: st.session_state[key] = None
+        for key in ['results_df', 'ebook_ideas', 'kw_active']: 
+            if key in st.session_state: del st.session_state[key]
         st.rerun()
 
-    genere = st.selectbox("Genere", ["Saggio Scientifico", "Quiz Scientifico", "Manuale Tecnico", "Religioso", "Spirituale", "Business", "Romanzo", "Psicologico", "Biografia", "Ricettario"])
-    target = st.text_input("Target")
-    dolore = st.text_input("Problema")
-    sogno = st.text_input("Risultato")
+    st.markdown("---")
+    genere = st.selectbox("Genere", ["Saggio", "Manuale", "Business", "Romanzo", "Psicologico", "Ricettario"])
+    target = st.text_input("Target", placeholder="es. Ingegneri")
+    dolore = st.text_input("Problema", placeholder="es. gestione tempo")
+    sogno = st.text_input("Risultato", placeholder="es. produttività")
     
-    if st.button("🧠 GENERA KEYWORD", type="primary"):
-        p = f"Genera UNA keyword Long-Tail per '{genere}' rivolto a '{target}'. Dolore: {dolore}. Rispondi: KEYWORD: [testo] | LOGICA: [testo]"
+    if st.button("🧠 GENERA KEYWORD AI", type="primary"):
+        p = f"Genera UNA keyword Long-Tail per '{genere}' rivolto a '{target}'. Dolore: {dolore}. Risposta: KEYWORD: [testo] | LOGICA: [testo]"
         res = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": p}]).choices[0].message.content
         st.session_state.kw_active = res.split("KEYWORD:")[1].split("|")[0].strip()
 
@@ -133,11 +149,11 @@ with st.sidebar:
     run_btn = st.button("🚀 ANALIZZA 100 LIBRI UNICI", use_container_width=True)
 
 # ==============================================================================
-# 5. DASHBOARD & VERDETTO
+# 5. DASHBOARD & ANALISI
 # ==============================================================================
 if run_btn and API_READY:
-    with st.spinner("Esecuzione scansione deduplicata..."):
-        df = run_unique_centurion_scan(mkt, final_q, 120)
+    with st.spinner("Analisi massiva deduplicata in corso..."):
+        df = run_unique_centurion_scan(mkt, final_q)
         if not df.empty:
             st.session_state.results_df = df
             avg_p = df['Prezzo'].mean()
@@ -145,30 +161,30 @@ if run_btn and API_READY:
             st.session_state.score = 40 + (30 if avg_p > 13 else 0) + (30 if self_r > 40 else 0)
             
             if st.session_state.score >= 60:
-                p_ebook = f"L'analisi per '{final_q}' è positiva. Genera 3 titoli e 3 trame (100 parole) per eBook. Formato: TITOLO: [testo] | TRAMA: [testo]"
+                p_ebook = f"Genera 3 titoli e 3 trame (100 parole) per eBook basandoti su '{final_q}'. Formato: TITOLO: [testo] | TRAMA: [testo]"
                 st.session_state.ebook_ideas = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": p_ebook}]).choices[0].message.content
 
 if st.session_state.results_df is not None:
-    st.header(f"📊 Report Strategico: {final_q.upper()}")
+    st.header(f"📊 Report: {final_q.upper()}")
     
-    with st.expander("📖 Spiegazione dei Risultati", expanded=True):
+    with st.expander("📖 Guida all'Analisi", expanded=True):
         st.markdown(f"""
         <div class="guide-box">
-            <b>Analisi su 100 Libri Unici:</b> Abbiamo rimosso i duplicati e le inserzioni ripetute per darti dati puri.<br><br>
-            <b>Opportunity Score ({st.session_state.score}/100):</b> Se è verde, il mercato ha "fame" di nuovi contenuti e i margini sono alti.<br><br>
-            <b>Indie Ratio:</b> Indica se la nicchia è scalabile da un autore indipendente o se è bloccata dai grandi editori.
+            <b>Analisi 100 Libri Unici:</b> Dati puliti senza ripetizioni pubblicitarie.<br><br>
+            <b>Opportunity Score ({st.session_state.score}/100):</b> Valutazione della profittabilità.<br><br>
+            <b>Indie Ratio:</b> Percentuale di spazio per autori indipendenti.
         </div>
         """, unsafe_allow_html=True)
 
-    st.dataframe(st.session_state.results_df, column_config={"Preview": st.column_config.ImageColumn("Cover")}, use_container_width=True)
+    st.dataframe(st.session_state.results_df, column_config={"Preview": st.column_config.ImageColumn("Cover")}, use_container_width=True, hide_index=True)
     
     c1, c2 = st.columns(2)
-    c1.metric("Verdetto Finale", f"{st.session_state.score}/100")
+    c1.metric("Punteggio Nicchia", f"{st.session_state.score}/100")
     c2.metric("Libri Unici Analizzati", f"{len(st.session_state.results_df)}")
 
     if st.session_state.score >= 60 and st.session_state.ebook_ideas:
         st.markdown("---")
-        st.header("🎯 Proposte eBook Strategiche")
+        st.header("🎯 Suggerimenti eBook")
         ebooks = st.session_state.ebook_ideas.split("TITOLO:")
         for eb in ebooks[1:]:
             parts = eb.split("| TRAMA:")
