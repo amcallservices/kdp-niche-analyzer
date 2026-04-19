@@ -13,15 +13,39 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 2. CSS per UI Professionale (Fix Colori per Tema Scuro/Chiaro)
+# 2. CSS per UI Professionale e RIMOZIONE MENU IN ALTO A DESTRA
 st.markdown("""
     <style>
+        /* Nasconde il menu in alto a destra (hamburger menu) e il footer */
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        header {visibility: hidden;}
+        
+        /* Forza la sidebar a restare aperta */
         [data-testid="collapsedControl"] { display: none; }
-        .stMetric { background-color: #ffffff !important; padding: 15px; border-radius: 10px; border: 1px solid #e0e0e0; border-left: 5px solid #ff9900; box-shadow: 2px 2px 5px rgba(0,0,0,0.05); }
+        
+        /* Stile Metriche */
+        .stMetric { 
+            background-color: #ffffff !important; 
+            padding: 15px; 
+            border-radius: 10px; 
+            border: 1px solid #e0e0e0; 
+            border-left: 5px solid #ff9900; 
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.05); 
+        }
         [data-testid="stMetricValue"] { color: #1e1e1e !important; font-size: 1.8rem !important; }
         [data-testid="stMetricLabel"] { color: #555555 !important; font-weight: bold !important; }
-        .keyword-box { padding: 12px; background-color: #f0f7f9; color: #004455 !important; border-radius: 8px; margin-bottom: 12px; border-left: 5px solid #00a8cc; font-weight: 500;}
-        .gen-btn-box { background-color: #ffffff; border: 1px solid #d1d5db; padding: 10px; border-radius: 8px; margin-bottom: 10px; }
+        
+        /* Box Keyword */
+        .keyword-box { 
+            padding: 12px; 
+            background-color: #f0f7f9; 
+            color: #004455 !important; 
+            border-radius: 8px; 
+            margin-bottom: 12px; 
+            border-left: 5px solid #00a8cc; 
+            font-weight: 500;
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -59,6 +83,8 @@ def get_amazon_data(marketplace, keyword, pagine, colore):
     domains = {"Italia": "amazon.it", "USA": "amazon.com", "Spagna": "amazon.es", "Francia": "amazon.fr", "Germania": "amazon.de"}
     domain = domains.get(marketplace, "amazon.it")
     country = 'it' if marketplace == "Italia" else 'us'
+    
+    # CARATTERISTICA AGGIUNTA: Forza la ricerca esclusivamente nella categoria Libri (i=stripbooks)
     target_url = f"https://www.{domain}/s?k={keyword.replace(' ', '+')}&i=stripbooks"
     
     try:
@@ -148,7 +174,7 @@ with st.sidebar:
 
 # --- LOGICA MAIN ---
 if run and key_input:
-    with st.spinner("Esecuzione Niche Engineering..."):
+    with st.spinner("Esecuzione Niche Engineering (Solo Libri ed Ebook)..."):
         df = get_amazon_data(mkt, key_input, pagine, colore)
         if df is not None:
             st.success("Dati Ricevuti!")
