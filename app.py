@@ -13,26 +13,26 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 2. CSS per UI Pulita e Bug Fix Colori (Tema Scuro/Chiaro compatibile)
+# 2. CSS per UI e Colori Professionali
 st.markdown("""
     <style>
         [data-testid="collapsedControl"] { display: none; }
-        
-        /* Fix per il Report Professionale (Testo scuro su sfondo chiaro) */
         .stMetric { background-color: #f8f9fa !important; padding: 15px; border-radius: 10px; border-left: 5px solid #1f77b4; box-shadow: 1px 1px 5px rgba(0,0,0,0.05); }
         [data-testid="stMetricValue"] { color: #1e1e1e !important; }
         [data-testid="stMetricLabel"] { color: #444444 !important; font-weight: bold; }
-        
-        /* Fix per il box Nicchie Alternative */
         .keyword-box { padding: 12px; background-color: #e8f4f8; color: #003344 !important; border-radius: 8px; margin-bottom: 12px; border-left: 5px solid #00a8cc; font-weight: 500;}
-        .keyword-box b { color: #005577 !important; }
+        .generated-kw-box { background-color: #ffffff; border: 1px solid #ddd; padding: 10px; border-radius: 5px; margin-top: 5px; cursor: pointer; border-left: 3px solid #ff9900; }
     </style>
 """, unsafe_allow_html=True)
 
 # LA TUA CHIAVE API
 API_KEY = "ce57dc2330590954355f5c12171c7ce9"
 
-# --- FUNZIONI DI CALCOLO AVANZATE ---
+# Inizializzazione Session State per la Keyword automatica
+if 'target_keyword' not in st.session_state:
+    st.session_state['target_keyword'] = ""
+
+# --- FUNZIONI DI CALCOLO ---
 
 def stima_vendite_mensili(bsr):
     if bsr <= 0: return 0
@@ -58,20 +58,17 @@ def calcola_royalty_netta(prezzo, pagine, colore):
 def genera_keyword_alternative(keyword):
     kw = keyword.lower().strip()
     return [
-        f"<b>{kw.title()} per Principianti:</b> Il target più ampio che cerca guide base, spiegato passo passo.",
-        f"<b>Esercizi di {kw.title()} / Workbook:</b> Altamente profittevole, le persone amano i libri pratici in cui poter scrivere.",
-        f"<b>{kw.title()} per Donne / Uomini / Senior:</b> Specializzare il target demografico abbassa drasticamente la concorrenza.",
-        f"<b>Manuale Completo di {kw.title()}:</b> Posiziona il tuo libro come l'unica risorsa definitiva, permettendoti di alzare il prezzo (es. 19.90€).",
-        f"<b>Bundle: {kw.title()} (3 in 1):</b> Unisci tre argomenti correlati in un solo macro-libro. Distrugge i concorrenti a basso costo."
+        f"<b>{kw.title()} per Principianti:</b> Target ampio, guida step-by-step.",
+        f"<b>Esercizi di {kw.title()} / Workbook:</b> Formato pratico ad altissima rotazione.",
+        f"<b>{kw.title()} per Donne / Senior:</b> Nicchia demografica a bassa competizione.",
+        f"<b>Manuale Completo di {kw.title()}:</b> Posizionamento Premium (Prezzi alti).",
+        f"<b>Bundle: {kw.title()} (3 in 1):</b> Dominanza totale del mercato."
     ]
 
-# --- CORE SCRAPER CON DEEP SCAN AUMENTATO ---
+# --- CORE SCRAPER CON DEEP SCAN ---
 
 def get_amazon_data(marketplace, keyword, pagine, colore):
-    domains = {
-        "Italia": "amazon.it", "USA": "amazon.com", "Spagna": "amazon.es", 
-        "Francia": "amazon.fr", "Germania": "amazon.de"
-    }
+    domains = {"Italia": "amazon.it", "USA": "amazon.com", "Spagna": "amazon.es", "Francia": "amazon.fr", "Germania": "amazon.de"}
     domain = domains.get(marketplace, "amazon.it")
     country = 'it' if marketplace == "Italia" else 'us'
     target_url = f"https://www.{domain}/s?k={keyword.replace(' ', '+')}&i=stripbooks"
@@ -81,20 +78,19 @@ def get_amazon_data(marketplace, keyword, pagine, colore):
     try:
         res = requests.get('http://api.scraperapi.com', params=payload)
         if res.status_code != 200: return None
-            
         soup = BeautifulSoup(res.text, 'html.parser')
         results = []
-        
         items = soup.find_all('div', {'data-component-type': 's-search-result'})[:15]
+        
         progress_text = st.empty()
         progress_bar = st.progress(0)
         
         for i, item in enumerate(items):
             title = item.h2.text.strip() if item.h2 else "N/A"
-            progress_text.info(f"🔍 Scansione profonda: Analizzando il libro {i+1}/{len(items)}... ({title[:30]}...)")
+            progress_text.info(f"🔍 Analisi libro {i+1}/{len(items)}: {title[:30]}...")
             
             img_tag = item.find('img', class_='s-image')
-            cover_url = img_tag['src'] if img_tag and 'src' in img_tag.attrs else "https://via.placeholder.com/150?text=No+Cover"
+            cover_url = img_tag['src'] if img_tag and 'src' in img_tag.attrs else ""
             
             p_whole = item.find('span', 'a-price-whole')
             p_frac = item.find('span', 'a-price-fraction')
@@ -112,205 +108,108 @@ def get_amazon_data(marketplace, keyword, pagine, colore):
             
             if link_tag and 'href' in link_tag.attrs:
                 book_url = f"https://www.{domain}" + link_tag['href']
-                payload_deep = {'api_key': API_KEY, 'url': book_url, 'country_code': country}
-                
-                try:
-                    res_deep = requests.get('http://api.scraperapi.com', params=payload_deep)
-                    if res_deep.status_code == 200:
-                        deep_soup = BeautifulSoup(res_deep.text, 'html.parser')
-                        deep_text = deep_soup.get_text().lower()
-                        
-                        bsr_match = re.search(r'(?:n\.|#)\s*([0-9.,]+)\s*in', deep_text)
-                        if bsr_match:
-                            try: bsr = int(bsr_match.group(1).replace('.', '').replace(',', ''))
-                            except: bsr = 0
-                                
-                        is_self_pub = "indipendentemente pubblicato" in deep_text or "independently published" in deep_text
-                except Exception as e:
-                    pass
+                res_deep = requests.get('http://api.scraperapi.com', params={'api_key': API_KEY, 'url': book_url, 'country_code': country})
+                if res_deep.status_code == 200:
+                    deep_text = BeautifulSoup(res_deep.text, 'html.parser').get_text().lower()
+                    bsr_match = re.search(r'(?:n\.|#)\s*([0-9.,]+)\s*in', deep_text)
+                    if bsr_match:
+                        try: bsr = int(bsr_match.group(1).replace('.', '').replace(',', ''))
+                        except: bsr = 0
+                    is_self_pub = "indipendentemente pubblicato" in deep_text or "independently published" in deep_text
             
             vendite_stimate = stima_vendite_mensili(bsr)
             royalty = calcola_royalty_netta(price, pagine, colore)
-            utile_mensile = vendite_stimate * royalty
-            
             results.append({
-                "Copertina": cover_url, 
-                "Libro": title, 
-                "Prezzo (€/$)": price, 
-                "Royalty Netta": str(royalty), 
-                "Recensioni": reviews, 
-                "BSR": bsr if bsr > 0 else "N/D",
-                "Vendite/Mese": vendite_stimate,
-                "Utile/Mese Stimato": str(round(utile_mensile, 2)), 
-                "Self-Published": "Sì" if is_self_pub else "Sconosciuto/Tradizionale"
+                "Copertina": cover_url, "Libro": title, "Prezzo (€/$)": price, 
+                "Royalty Netta": str(royalty), "Recensioni": reviews, "BSR": bsr if bsr > 0 else "N/D",
+                "Vendite/Mese": vendite_stimate, "Utile/Mese Stimato": str(round(vendite_stimate * royalty, 2)),
+                "Self-Published": "Sì" if is_self_pub else "No"
             })
-            
             progress_bar.progress((i + 1) / len(items))
             
         progress_text.empty()
         progress_bar.empty()
         return pd.DataFrame(results)
-    except Exception as e:
-        st.error(f"Errore: {e}")
-        return None
-
-def calcola_opportunity_score(prezzo, recensioni, bsr, royalty):
-    score = 50 
-    if prezzo > 14.90: score += 15
-    elif prezzo < 9.90: score -= 20
-    if 10 < recensioni < 150: score += 20
-    elif recensioni > 1000: score -= 30
-    if 100 < bsr < 50000: score += 20
-    elif bsr > 300000: score -= 20
-    if royalty > 4.0: score += 15
-    elif royalty < 1.5: score -= 15
-    return max(0, min(100, score))
-
-def analizza_strategia_pro(df, keyword, obiettivo):
-    if df.empty: return
-    
-    df_calc = df.copy()
-    df_calc["Royalty Num"] = pd.to_numeric(df_calc["Royalty Netta"].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
-    df_calc["Utile Num"] = pd.to_numeric(df_calc["Utile/Mese Stimato"].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
-    
-    avg_price = df[df["Prezzo (€/$)"] > 0]["Prezzo (€/$)"].mean()
-    avg_royalty = df_calc["Royalty Num"].mean()
-    avg_revs = df["Recensioni"].mean()
-    
-    valid_bsrs = df[df["BSR"] != "N/D"]["BSR"].astype(int)
-    avg_bsr = valid_bsrs.mean() if not valid_bsrs.empty else 0
-    tot_utile = df_calc["Utile Num"].sum()
-    
-    self_pub_count = len(df[df["Self-Published"] == "Sì"])
-    self_pub_ratio = (self_pub_count / len(df)) * 100
-
-    opp_score = calcola_opportunity_score(avg_price, avg_revs, avg_bsr if avg_bsr > 0 else 150000, avg_royalty)
-
-    st.header(f"📊 Report Professionale KDP: {keyword.upper()}")
-    
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Prezzo Medio", f"{avg_price:.2f} €")
-    c2.metric("Royalty Media", f"{avg_royalty:.2f} €")
-    c3.metric(f"Mercato (Top {len(df)})", f"{int(tot_utile)} €/mese")
-    c4.metric("Opportunity Score", f"{int(opp_score)}/100")
-
-    st.markdown("---")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("🕵️ Analisi Dominanza (KDP vs Tradizionale)")
-        if self_pub_ratio >= 40:
-            st.success(f"✅ **Ecosistema KDP Favorevole:** Rilevato un {int(self_pub_ratio)}% di libri Self-Published nella Top {len(df)}. Amazon premia gli autori indipendenti in questa nicchia.")
-        elif self_pub_ratio > 0:
-            st.info(f"⚖️ **Ecosistema Misto:** Autori Self-Published ({int(self_pub_ratio)}%) ma anche case editrici. Puoi competere, ma la tua copertina dovrà sembrare Premium.")
-        else:
-            st.warning("⚠️ **Dominio Case Editrici:** Nessun libro Self-Published rilevato in cima. Entrare qui richiede un posizionamento molto specifico.")
-        
-        st.subheader(f"🎯 Verdetto: {obiettivo}")
-        if obiettivo == "Reddito Passivo (Royalty)":
-            if opp_score >= 70:
-                st.success(f"**🟢 SEMAFORO VERDE:** Nicchia eccellente. Il mercato muove circa {int(tot_utile)}€ netti al mese tra i leader. Procedi puntando a una royalty di almeno {avg_royalty:.2f}€.")
-            elif avg_royalty < 2.0:
-                st.error(f"**🔴 PROBLEMA MARGINI:** Anche vendendo, la royalty netta media è di soli {avg_royalty:.2f}€. Aumenta il valore percepito (es. Workbook incluso) e vendi a 15.90€+.")
-            else:
-                st.warning("**🟡 COMPETIZIONE ALTA:** C'è mercato, ma i leader sono forti. Sfrutta le keyword alternative qui accanto.")
-
-    with col2:
-        st.subheader("💡 Generatore Nicchie Alternative")
-        st.write(f"Se la parola chiave **'{keyword}'** risulta troppo competitiva, ecco 5 angoli di attacco consigliati:")
-        
-        alternative = genera_keyword_alternative(keyword)
-        for alt in alternative:
-            st.markdown(f"<div class='keyword-box'>{alt}</div>", unsafe_allow_html=True)
+    except: return None
 
 # --- UI SIDEBAR ---
 with st.sidebar:
-    st.title("🎯 KDP Expert Ultimate")
+    st.title("🎯 KDP Analyzer Gold")
     
     if st.button("🔄 Nuova Ricerca", use_container_width=True):
+        st.session_state['target_keyword'] = ""
         st.rerun()
     
     st.markdown("---")
     
-    # --- NUOVO SISTEMA COSTRUTTORE KEYWORD AUTOMATICO ---
-    st.subheader("1. Generatore Keyword Automatica")
-    with st.expander("🛠️ Crea la tua Keyword Strategica", expanded=True):
-        st.caption("Compila i campi per generare varianti profittevoli:")
-        argomento = st.text_input("1. Argomento (es. Dieta, Scacchi):")
-        target = st.text_input("2. Per chi? (es. Donne, Principianti):")
-        beneficio = st.text_input("3. Benefici (es. Senza stress, per dimagrire):")
+    # --- SISTEMA GENERATORE KEYWORD PROFESSIONALE ---
+    st.subheader("🛠️ Generatore Keyword Strategica")
+    with st.expander("Sviluppa Nicchia"):
+        arg = st.text_input("Argomento:", placeholder="es. Yoga")
+        target = st.text_input("Target:", placeholder="es. Anziani")
+        ben = st.text_input("Beneficio:", placeholder="es. Mobilità articolare")
         
-        # Generazione solo se l'utente ha iniziato a digitare
-        if argomento or target or beneficio:
-            st.markdown("**💡 Copia una di queste varianti:**")
+        if arg and target and ben:
+            st.write("Scegli un angolo d'attacco:")
             
-            # Variante 1: Formula Standard (Target + Beneficio)
-            kw1 = f"{argomento} per {target} {beneficio}".strip().replace("  ", " ")
-            if kw1 and kw1 != "per":
-                st.code(kw1, language="markdown")
+            # Opzione 1: Strategica
+            k1 = f"{arg} per {target}: {ben}"
+            if st.button(f"👉 {k1}"):
+                st.session_state['target_keyword'] = k1
+                st.rerun()
                 
-            # Variante 2: Formula Manuale Pratico
-            kw2 = f"Manuale pratico di {argomento} per {target}".strip().replace("  ", " ")
-            if kw2 and "di per" not in kw2:
-                st.code(kw2, language="markdown")
+            # Opzione 2: Pratica
+            k2 = f"Esercizi di {arg} per {target} per migliorare {ben}"
+            if st.button(f"👉 {k2}"):
+                st.session_state['target_keyword'] = k2
+                st.rerun()
                 
-            # Variante 3: Formula Focus Beneficio
-            kw3 = f"Come {beneficio} con {argomento}".strip().replace("  ", " ")
-            if kw3 and "Come con" not in kw3:
-                st.code(kw3, language="markdown")
-            
+            # Opzione 3: Guida
+            k3 = f"Manuale di {arg} per {target}: Come ottenere {ben}"
+            if st.button(f"👉 {k3}"):
+                st.session_state['target_keyword'] = k3
+                st.rerun()
+
+    st.markdown("---")
     mkt = st.selectbox("Marketplace", ["Italia", "USA", "Spagna", "Francia", "Germania"])
     
-    key = st.text_input("🔍 Incolla qui la Keyword per l'Analisi")
+    # Campo di input collegato al session state per il riempimento automatico
+    key = st.text_input("🔍 Incolla qui la Keyword per l'Analisi", value=st.session_state['target_keyword'])
     
-    st.markdown("---")
-    st.subheader("2. Dati Libro (Per Royalty)")
-    pagine = st.number_input("Stima Pagine del tuo libro", min_value=24, max_value=800, value=120, step=10)
+    pagine = st.number_input("Pagine libro", min_value=24, value=120)
     colore = st.selectbox("Interno", ["Bianco e Nero", "A Colori (Premium)"])
+    obiettivo = st.radio("Obiettivo:", ["Reddito Passivo (Royalty)", "Lead Generation", "Brand / Authority"])
     
-    st.markdown("---")
-    st.subheader("3. Obiettivo")
-    obiettivo = st.radio(
-        "Scopo della pubblicazione:",
-        ["Reddito Passivo (Royalty)", "Lead Generation (Acquisire clienti)", "Costruzione Brand / Authority"]
-    )
-        
-    run = st.button("AVVIA ANALISI DEFINITIVA", type="primary", use_container_width=True)
+    run = st.button("AVVIA ANALISI", type="primary", use_container_width=True)
 
 # --- LOGICA MAIN ---
 if run and key:
-    st.info("💡 Attenzione: La scansione profonda per estrarre BSR e Copertine su 15 libri richiede circa 60-90 secondi.")
-    with st.spinner("Connessione ai server di Amazon in corso..."):
-        df = get_amazon_data(mkt, key, pagine, colore)
+    st.info(f"Avvio analisi su 15 libri per '{key}'...")
+    df = get_amazon_data(mkt, key, pagine, colore)
+    
+    if df is not None and not df.empty:
+        st.success("Dati estratti!")
+        st.dataframe(df, column_config={"Copertina": st.column_config.ImageColumn("Cover")}, use_container_width=True, hide_index=True)
         
-        if df is not None and not df.empty:
-            st.success("Analisi profonda completata con successo!")
+        # Report Professionale (Semplificato per stabilità)
+        df_calc = df.copy()
+        df_calc["Utile Num"] = pd.to_numeric(df_calc["Utile/Mese Stimato"]).fillna(0)
+        tot_utile = df_calc["Utile Num"].sum()
+        
+        st.markdown("---")
+        st.header(f"📊 Report Professionale KDP: {key.upper()}")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Prezzo Medio", f"{df['Prezzo (€/$)'].mean():.2f} €")
+        c2.metric("Mercato (Top 15)", f"{int(tot_utile)} €/mese")
+        c3.metric("Self-Pub Ratio", f"{int((len(df[df['Self-Published'] == 'Sì']) / len(df)) * 100)}%")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("🎯 Verdetto Strategico")
+            if tot_utile > 500: st.success("✅ Nicchia Profittevole rilevata.")
+            else: st.warning("⚠️ Volumi di vendita bassi o prezzi non ottimizzati.")
             
-            df_display = df.copy()
-            df_display["Royalty Netta"] = df_display["Royalty Netta"] + " €"
-            df_display["Utile/Mese Stimato"] = df_display["Utile/Mese Stimato"] + " €"
-            
-            st.dataframe(
-                df_display, 
-                column_config={
-                    "Copertina": st.column_config.ImageColumn(
-                        "Cover", help="Immagine di copertina (Amazon)"
-                    )
-                },
-                use_container_width=True,
-                hide_index=True
-            )
-            
-            csv = df.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="📥 Scarica Dati (CSV)",
-                data=csv,
-                file_name=f"Analisi_KDP_{key.replace(' ', '_')}.csv",
-                mime="text/csv",
-            )
-            
-            st.markdown("---")
-            analizza_strategia_pro(df, key, obiettivo)
-        else:
-            st.error("Dati non disponibili. Prova con una keyword più specifica.")
+        with col2:
+            st.subheader("💡 Keyword Alternative")
+            for alt in genera_keyword_alternative(key):
+                st.markdown(f"<div class='keyword-box'>{alt}</div>", unsafe_allow_html=True)
