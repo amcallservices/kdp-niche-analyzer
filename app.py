@@ -8,9 +8,9 @@ import openai
 from concurrent.futures import ThreadPoolExecutor
 
 # ==============================================================================
-# 1. DESIGN SYSTEM: CONTRASTO BIANCO/NERO & RIMOZIONE MENU (INTATTO)
+# 1. DESIGN SYSTEM: CONTRASTO BIANCO/NERO & RIMOZIONE MENU
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 11.6", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 11.7", page_icon="🛡️", layout="wide")
 
 st.markdown("""
     <style>
@@ -50,7 +50,7 @@ st.markdown("""
 st.markdown("<div class='program-title'>Analisi delle Nicchie Profittevoli</div>", unsafe_allow_html=True)
 
 # ==============================================================================
-# 2. GESTIONE MEMORIA (PERSISTENZA - INTATTO)
+# 2. GESTIONE MEMORIA (PERSISTENZA)
 # ==============================================================================
 if 'data' not in st.session_state: st.session_state.data = None
 if 'suggestions' not in st.session_state: st.session_state.suggestions = None
@@ -59,7 +59,7 @@ if 'score' not in st.session_state: st.session_state.score = 0
 if 'suggested_kws' not in st.session_state: st.session_state.suggested_kws = ""
 
 # ==============================================================================
-# 3. MOTORE DI SCRAPING TRIPLE-FALLBACK (POTENZIATO CON SELETTORI IBRIDI)
+# 3. MOTORE DI SCRAPING TRIPLE-FALLBACK
 # ==============================================================================
 def get_amazon_data(mkt, keyword):
     domains = {"Italia": "amazon.it", "USA": "amazon.com", "Spagna": "amazon.es", "Francia": "amazon.fr", "Germania": "amazon.de"}
@@ -71,26 +71,21 @@ def get_amazon_data(mkt, keyword):
     
     def fetch_with_triple_fallback(p):
         amazon_url = f"https://www.{domain}/s?k={keyword.replace(' ', '+')}&i=stripbooks&page={p}"
-        
-        # Sequenza Fallback migliorata
         try:
             ant_api = f"https://api.scrapingant.com/v2/general?url={urllib.parse.quote(amazon_url)}&x-api-key={ANT_KEY}&browser=true&proxy_type=residential"
-            r = requests.get(ant_api, timeout=35)
-            if r.status_code == 200: return r.text
+            r = requests.get(ant_api, timeout=30)
+            if r.status_code == 200 and "s-search-result" in r.text: return r.text
         except: pass
-        
         try:
             scraperapi_url = f"http://api.scraperapi.com?api_key={SCRAPERAPI_KEY}&url={urllib.parse.quote(amazon_url)}&render=true"
-            r = requests.get(scraperapi_url, timeout=35)
-            if r.status_code == 200: return r.text
+            r = requests.get(scraperapi_url, timeout=30)
+            if r.status_code == 200 and "s-search-result" in r.text: return r.text
         except: pass
-
         try:
             ws_ai_url = f"https://api.webscraping.ai/html?api_key={WEBSCRAPINGAI_KEY}&url={urllib.parse.quote(amazon_url)}&proxy=residential&js=true"
-            r = requests.get(ws_ai_url, timeout=35)
-            if r.status_code == 200: return r.text
+            r = requests.get(ws_ai_url, timeout=30)
+            if r.status_code == 200 and "s-search-result" in r.text: return r.text
         except: pass
-        
         return None
 
     with ThreadPoolExecutor(max_workers=5) as executor:
@@ -101,27 +96,15 @@ def get_amazon_data(mkt, keyword):
     for html in pages:
         if not html: continue
         soup = BeautifulSoup(html, 'html.parser')
-        
-        # SELETTORI IBRIDI: Amazon cambia spesso le classi. Cerchiamo in più modi.
         items = soup.find_all('div', {'data-component-type': 's-search-result'})
-        if not items: # Fallback se il selettore principale fallisce
-            items = soup.select('.s-result-item[data-asin]')
-
         for item in items:
-            # 1. Trova il titolo
             title_el = item.h2 or item.select_one('.a-size-medium') or item.select_one('.a-size-base-plus')
             title = title_el.text.strip() if title_el else ""
             if not title or title in seen: continue
-            
-            # 2. Analisi BSR (Regex più flessibile)
             text = item.get_text(separator=' ').lower()
             bsr_match = re.search(r'(?:n\.|#|rank)\s*([0-9.,]+)', text)
             bsr = bsr_match.group(1).replace('.', '').replace(',', '') if bsr_match else "N/D"
-            
-            # 3. Editore
             is_self = "Sì (Self-Pub)" if any(x in text for x in ['independently', 'kdp', 'indipendente', 'createspace']) else "Tradizionale"
-            
-            # 4. Prezzo (Selettore Ibrido)
             price = 0.0
             price_el = item.select_one('.a-price .a-offscreen')
             if price_el:
@@ -129,24 +112,17 @@ def get_amazon_data(mkt, keyword):
                     price_str = re.sub(r'[^\d.,]', '', price_el.text).replace(',', '.')
                     price = float(price_str)
                 except: price = 0.0
-            else: # Vecchio metodo fallback
-                pw, pf = item.find('span', 'a-price-whole'), item.find('span', 'a-price-fraction')
-                try: price = float(f"{pw.text.replace(',','').replace('.','')}.{pf.text}") if pw and pf else 0.0
-                except: price = 0.0
-            
-            # Aggiungiamo ai risultati se abbiamo almeno il titolo (anche se il prezzo è 0 per libri gratis)
-            seen.add(title)
-            results.append({"Titolo Analizzato": title, "Prezzo": price, "BSR": bsr, "Editore": is_self})
-            
+            if price > 0 or bsr != "N/D":
+                seen.add(title)
+                results.append({"Titolo Analizzato": title, "Prezzo": price, "BSR": bsr, "Editore": is_self})
             if len(results) >= 60: break
-            
     return pd.DataFrame(results)
 
 # ==============================================================================
-# 4. SIDEBAR (PROMPT STRATEGICO POTENZIATO - INTATTO)
+# 4. SIDEBAR CON GENERAZIONE TITOLI/TRAME IPER-ATTINENTI
 # ==============================================================================
 with st.sidebar:
-    st.title("🛡️ STRATEGY LAB 11.6")
+    st.title("🛡️ STRATEGY LAB 11.7")
     if st.button("🔄 RESET"):
         st.session_state.data = None
         st.session_state.suggestions = None
@@ -161,7 +137,7 @@ with st.sidebar:
     if st.button("🔍 GENERA KEYWORD CHIRURGICHE"):
         if not nicchia or not target: st.error("Inserisci nicchia e target!")
         else:
-            with st.spinner("Applicando ragionamento strategico..."):
+            with st.spinner("Ragionamento strategico in corso..."):
                 client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
                 prompt_kw = f"Agisci come un analista KDP esperto. Nicchia: {nicchia}, Genere: {genere}, Target: {target}. Genera 5 keyword long-tail CHIRURGICHE separate da virgola."
                 kw_ai = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt_kw}]).choices[0].message.content
@@ -172,7 +148,7 @@ with st.sidebar:
         kw_selezionata = st.text_input("Keyword finale:", value=st.session_state.suggested_kws.split(',')[0].strip())
         
         if st.button("🚀 LANCIA ANALISI TRIPLE-ENGINE", type="primary"):
-            with st.spinner("Analisi in corso sui 3 motori..."):
+            with st.spinner("Analisi in corso..."):
                 df = get_amazon_data("Italia", kw_selezionata)
                 if not df.empty:
                     st.session_state.data = df
@@ -183,13 +159,24 @@ with st.sidebar:
                     
                     if st.session_state.score >= 60:
                         client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                        prompt_book = f"Analisi POSITIVA per '{kw_selezionata}' ({genere}). Genera 3 titoli e 3 trame specifici per questo argomento e per il target '{target}'. Formato: TITOLO: [testo] | TRAMA: [testo]."
+                        # PROMPT POTENZIATO PER MASSIMA ATTINENZA
+                        prompt_book = f"""
+                        Agisci come un Senior Editor KDP di successo. L'analisi di mercato per la keyword '{kw_selezionata}' è POSITIVA.
+                        Il tuo compito è generare 3 proposte di libri che trattino ESCLUSIVAMENTE l'argomento della keyword '{kw_selezionata}' nel genere '{genere}' per il target '{target}'.
+                        
+                        REGOLE TASSATIVE:
+                        1. Ogni TITOLO deve contenere la keyword o un riferimento diretto e inequivocabile ad essa.
+                        2. Ogni TRAMA deve spiegare come il libro copre l'argomento della keyword, quali problemi risolve per il target e perché è superiore alla concorrenza.
+                        3. Non divagare su altri argomenti. Resta focalizzato sulla keyword analizzata.
+                        
+                        Formato: TITOLO: [testo] | TRAMA: [testo].
+                        """
                         st.session_state.suggestions = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt_book}]).choices[0].message.content
                     else: st.session_state.suggestions = "NEGATIVE"
-                else: st.error("⚠️ Nessun dato trovato. Amazon ha bloccato i 3 motori o la keyword è inesistente.")
+                else: st.error("⚠️ Nessun dato trovato. Riprova.")
 
 # ==============================================================================
-# 5. DASHBOARD (STAMPA RISULTATI - INTATTO)
+# 5. DASHBOARD: RENDERING RISULTATI E CARDS STRATEGICHE
 # ==============================================================================
 if st.session_state.data is not None:
     st.markdown(f"<div class='white-title'>Report Chirurgico: {st.session_state.kw.upper()}</div>", unsafe_allow_html=True)
@@ -202,13 +189,18 @@ if st.session_state.data is not None:
     c3.metric("Score Nicchia", f"{st.session_state.score}/100")
 
     if st.session_state.suggestions == "NEGATIVE":
-        st.error("❌ ANALISI NEGATIVA: In base ai criteri strategici, questa nicchia presenta troppi rischi. Sconsigliato procedere.")
+        st.error(f"❌ ANALISI NEGATIVA: La keyword '{st.session_state.kw}' non è profittevole secondo i criteri strategici. Si sconsiglia la stesura.")
     elif st.session_state.suggestions:
-        st.success(f"✅ ANALISI POSITIVA! Ecco i titoli e le trame per la stesura del tuo libro su '{st.session_state.kw}':")
+        st.success(f"✅ ANALISI POSITIVA! Ecco i titoli e le trame iper-attinenti per '{st.session_state.kw}':")
         blocks = st.session_state.suggestions.split("TITOLO:")
         for block in blocks[1:]:
             if "|" in block:
                 parts = block.split("|")
                 title_final = parts[0].strip()
                 plot_final = parts[1].replace('TRAMA:', '').replace('Trama:', '').strip()
-                st.markdown(f'<div class="ebook-card"><div class="ebook-title">📘 {title_final}</div><div class="ebook-plot"><b>Strategia Editoriale:</b> {plot_final}</div></div>', unsafe_allow_html=True)
+                st.markdown(f"""
+                <div class="ebook-card">
+                    <div class="ebook-title">📘 {title_final}</div>
+                    <div class="ebook-plot"><b>Strategia Editoriale:</b> {plot_final}</div>
+                </div>
+                """, unsafe_allow_html=True)
