@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 # ==============================================================================
 # 1. DESIGN SYSTEM: CONTRASTO BIANCO/NERO & RIMOZIONE MENU
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 11.3", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 11.4", page_icon="🛡️", layout="wide")
 
 st.markdown("""
     <style>
@@ -53,6 +53,9 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# TITOLO SEMPRE VISIBILE (MODIFICA RICHIESTA)
+st.markdown("<div class='program-title'>Analisi delle Nicchie Profittevoli</div>", unsafe_allow_html=True)
+
 # ==============================================================================
 # 2. GESTIONE MEMORIA (PERSISTENZA)
 # ==============================================================================
@@ -63,42 +66,38 @@ if 'score' not in st.session_state: st.session_state.score = 0
 if 'suggested_kws' not in st.session_state: st.session_state.suggested_kws = ""
 
 # ==============================================================================
-# 3. MOTORE DI SCRAPING TRIPLE-FALLBACK (INCLUSO WEBSCRAPING.AI)
+# 3. MOTORE DI SCRAPING TRIPLE-FALLBACK
 # ==============================================================================
 def get_amazon_data(mkt, keyword):
     domains = {"Italia": "amazon.it", "USA": "amazon.com", "Spagna": "amazon.es", "Francia": "amazon.fr", "Germania": "amazon.de"}
     domain = domains.get(mkt, "amazon.it")
     
-    # Chiavi API (Assicurati che siano presenti nei tuoi st.secrets o incollale qui)
     ANT_KEY = "5a93911a587c4aff8d8dc7f2af9ea0db"
-    SCRAPERAPI_KEY = st.secrets.get("SCRAPERAPI_KEY", "TUA_CHIAVE_QUI")
-    WEBSCRAPINGAI_KEY = st.secrets.get("WEBSCRAPINGAI_KEY", "TUA_CHIAVE_QUI")
+    SCRAPERAPI_KEY = st.secrets.get("SCRAPERAPI_KEY", "")
+    WEBSCRAPINGAI_KEY = st.secrets.get("WEBSCRAPINGAI_KEY", "")
     
     def fetch_with_triple_fallback(p):
         amazon_url = f"https://www.{domain}/s?k={keyword.replace(' ', '+')}&i=stripbooks&page={p}"
         
-        # 1. TENTATIVO: ScrapingAnt
+        # 1. ScrapingAnt
         try:
             ant_api = f"https://api.scrapingant.com/v2/general?url={urllib.parse.quote(amazon_url)}&x-api-key={ANT_KEY}&browser=true&proxy_type=residential"
             r = requests.get(ant_api, timeout=30)
-            if r.status_code == 200 and "s-search-result" in r.text:
-                return r.text
+            if r.status_code == 200 and "s-search-result" in r.text: return r.text
         except: pass
         
-        # 2. TENTATIVO: ScraperAPI
+        # 2. ScraperAPI
         try:
             scraperapi_url = f"http://api.scraperapi.com?api_key={SCRAPERAPI_KEY}&url={urllib.parse.quote(amazon_url)}&render=true"
             r = requests.get(scraperapi_url, timeout=30)
-            if r.status_code == 200 and "s-search-result" in r.text:
-                return r.text
+            if r.status_code == 200 and "s-search-result" in r.text: return r.text
         except: pass
 
-        # 3. TENTATIVO: WebScraping.ai
+        # 3. WebScraping.ai
         try:
             ws_ai_url = f"https://api.webscraping.ai/html?api_key={WEBSCRAPINGAI_KEY}&url={urllib.parse.quote(amazon_url)}&proxy=residential&js=true"
             r = requests.get(ws_ai_url, timeout=30)
-            if r.status_code == 200 and "s-search-result" in r.text:
-                return r.text
+            if r.status_code == 200 and "s-search-result" in r.text: return r.text
         except: pass
         
         return None
@@ -132,16 +131,15 @@ def get_amazon_data(mkt, keyword):
             if price > 0 or bsr != "N/D":
                 seen.add(title)
                 results.append({"Titolo Analizzato": title, "Prezzo": price, "BSR": bsr, "Editore": is_self})
-            
             if len(results) >= 60: break
             
     return pd.DataFrame(results)
 
 # ==============================================================================
-# 4. SIDEBAR (STRATEGY COMMANDS)
+# 4. SIDEBAR
 # ==============================================================================
 with st.sidebar:
-    st.title("🛡️ STRATEGY LAB 11.3")
+    st.title("🛡️ STRATEGY LAB 11.4")
     if st.button("🔄 RESET"):
         st.session_state.data = None
         st.session_state.suggestions = None
@@ -154,12 +152,11 @@ with st.sidebar:
     target = st.text_input("Target Lettore")
     
     if st.button("🔍 GENERA KEYWORD CHIRURGICHE"):
-        if not nicchia or not target:
-            st.error("Inserisci nicchia e target!")
+        if not nicchia or not target: st.error("Inserisci nicchia e target!")
         else:
-            with st.spinner("L'AI sta scavando..."):
+            with st.spinner("Generazione..."):
                 client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                prompt_kw = f"Agisci come esperto SEO Amazon. Genera 5 keyword long-tail CHIRURGICHE per KDP. Nicchia: {nicchia}, Genere: {genere}, Target: {target}. Rispondi solo con le keyword separate da virgola."
+                prompt_kw = f"Genera 5 keyword long-tail CHIRURGICHE per KDP. Nicchia: {nicchia}, Genere: {genere}, Target: {target}. Rispondi solo con le keyword separate da virgola."
                 kw_ai = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt_kw}]).choices[0].message.content
                 st.session_state.suggested_kws = kw_ai
 
@@ -168,34 +165,27 @@ with st.sidebar:
         kw_selezionata = st.text_input("Keyword finale:", value=st.session_state.suggested_kws.split(',')[0].strip())
         
         if st.button("🚀 LANCIA ANALISI TRIPLE-ENGINE", type="primary"):
-            with st.spinner("Analisi massiva (ScrapingAnt -> ScraperAPI -> WebScrapingAI)..."):
+            with st.spinner("Analisi in corso..."):
                 df = get_amazon_data("Italia", kw_selezionata)
-                
                 if not df.empty:
                     st.session_state.data = df
                     st.session_state.kw = kw_selezionata
-                    
                     avg_p = df['Prezzo'].mean()
                     indie_r = (len(df[df['Editore'] == "Sì (Self-Pub)"]) / len(df)) * 100
                     st.session_state.score = 40 + (30 if avg_p > 12.5 else 0) + (30 if indie_r > 40 else 0)
                     
                     if st.session_state.score >= 60:
                         client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                        prompt_book = f"L'analisi per '{kw_selezionata}' ({genere}) è positiva. Genera 3 titoli magnetici e 3 trame specifiche che trattino questo argomento per '{target}'. Formato: TITOLO: [testo] | TRAMA: [testo]."
-                        sugg = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt_book}]).choices[0].message.content
-                        st.session_state.suggestions = sugg
-                    else:
-                        st.session_state.suggestions = "NEGATIVE"
-                else:
-                    st.error("⚠️ Tutte le API di scraping sono state bloccate o la keyword non ha risultati. Attendi 1 minuto.")
+                        prompt_book = f"Analisi POSITIVA per '{kw_selezionata}' ({genere}). Genera 3 titoli e 3 trame specifici per questo argomento e per il target '{target}'. Formato: TITOLO: [testo] | TRAMA: [testo]."
+                        st.session_state.suggestions = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt_book}]).choices[0].message.content
+                    else: st.session_state.suggestions = "NEGATIVE"
+                else: st.error("⚠️ Nessun dato trovato. Riprova.")
 
 # ==============================================================================
-# 5. DASHBOARD: ANALISI DELLE NICCHIE PROFITTEVOLI
+# 5. DASHBOARD
 # ==============================================================================
 if st.session_state.data is not None:
-    st.markdown("<div class='program-title'>Analisi delle Nicchie Profittevoli</div>", unsafe_allow_html=True)
     st.markdown(f"<div class='white-title'>Report Chirurgico: {st.session_state.kw.upper()}</div>", unsafe_allow_html=True)
-    
     st.dataframe(st.session_state.data, use_container_width=True, hide_index=True)
     
     c1, c2, c3 = st.columns(3)
@@ -204,10 +194,11 @@ if st.session_state.data is not None:
     c2.metric("Indie Ratio", f"{int(indie_p)}%")
     c3.metric("Score Nicchia", f"{st.session_state.score}/100")
 
+    # LOGICA AVVISI E SUGGERIMENTI (MODIFICA RICHIESTA)
     if st.session_state.suggestions == "NEGATIVE":
-        st.warning("⚠️ Score insufficiente. Nicchia non consigliata.")
+        st.error("❌ ANALISI NEGATIVA: Non è profittevole scrivere su quell'argomento. La competizione è troppo alta o la domanda è troppo bassa rispetto ai costi di produzione.")
     elif st.session_state.suggestions:
-        st.success(f"✅ ANALISI POSITIVA! Strategia per '{st.session_state.kw}':")
+        st.success(f"✅ ANALISI POSITIVA! Ecco i titoli e le trame per la stesura del tuo libro su '{st.session_state.kw}':")
         blocks = st.session_state.suggestions.split("TITOLO:")
         for block in blocks[1:]:
             if "|" in block:
