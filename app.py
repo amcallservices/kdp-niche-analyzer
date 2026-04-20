@@ -88,7 +88,6 @@ def get_amazon_data(mkt, keyword):
         return None
 
     with ThreadPoolExecutor(max_workers=5) as executor:
-        # FIX: Aumentato il range a 11 (scansiona le prime 10 pagine invece di 7)
         pages = list(executor.map(fetch_with_triple_fallback, range(1, 11)))
     
     results, seen = [], set()
@@ -111,16 +110,29 @@ def get_amazon_data(mkt, keyword):
                 except: price = 0.0
             seen.add(title)
             results.append({"Titolo Analizzato": title, "Prezzo": price, "BSR": bsr, "Editore": is_self})
-            
-            # FIX: Aumentato il limite di libri catturati da 60 a 100
             if len(results) >= 100: break
     return pd.DataFrame(results)
 
 # ==============================================================================
-# 4. SIDEBAR CON GENERAZIONE SILENZIOSA E PROMPT BLINDATO
+# 4. SIDEBAR CON CATEGORIE AMAZON E GENERAZIONE SILENZIOSA
 # ==============================================================================
 with st.sidebar:
     st.title("🛡️ STRATEGY LAB 11.9.1")
+    
+    # --- NUOVA SEZIONE: CATEGORIE LIBRI AMAZON ---
+    st.markdown("### 📚 Categoria Amazon")
+    amazon_categories = [
+        "Libri (Tutti)", "Arte, cinema e fotografia", "Biografie, diari e memorie", 
+        "Calendari e agende", "Casa, hobby e cucina", "Diritto", "Dizionari e opere di consultazione", 
+        "Economia, affari e finanza", "Educazione e insegnamento", "Famiglia, salute e benessere", 
+        "Fantascienza e Fantasy", "Fumetti e manga", "Gialli e Thriller", "Informatica, Web e Digital Media", 
+        "Letteratura e narrativa", "Libri per bambini", "Libri per ragazzi", "Lingua, linguistica e scrittura", 
+        "Politica", "Religione e spiritualità", "Romanzi rosa", "Scienze, tecnologia e medicina", 
+        "Scienze sociali", "Sport e tempo libero", "Storia", "Viaggi", "Test di preparazione"
+    ]
+    categoria_selezionata = st.selectbox("Scegli la categoria di riferimento:", amazon_categories)
+    st.markdown("---")
+
     if st.button("🔄 RESET"):
         st.session_state.data, st.session_state.suggestions, st.session_state.suggested_kws = None, None, ""
         st.rerun()
@@ -136,7 +148,8 @@ with st.sidebar:
             with st.spinner("Estrazione keyword..."):
                 client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
                 prompt_kw = (
-                    f"Agisci come esperto SEO Amazon. Nicchia: {nicchia}, Genere: {genere}, Target: {target}. "
+                    f"Agisci come esperto SEO Amazon specializzato nella categoria '{categoria_selezionata}'. "
+                    f"Nicchia: {nicchia}, Genere: {genere}, Target: {target}. "
                     "Genera 5 keyword long-tail specifiche separate da virgola. "
                     "NON scrivere introduzioni, NON scrivere conclusioni, NON aggiungere commenti. "
                     "Rispondi SOLO ed ESCLUSIVAMENTE con la lista di keyword."
@@ -158,14 +171,13 @@ with st.sidebar:
                     
                     if st.session_state.score >= 60:
                         client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                        # PROMPT SEMPLIFICATO E A PROVA DI ERRORE
-                        prompt_book = f"Analisi POSITIVA per '{kw_selezionata}' ({genere}) per il target '{target}'. Genera 3 idee per libri attinenti. Formato TASSATIVO:\nTITOLO: [testo]\nTRAMA: [testo]\n---"
+                        prompt_book = f"Analisi POSITIVA per '{kw_selezionata}' nella categoria '{categoria_selezionata}' per il target '{target}'. Genera 3 idee per libri attinenti. Formato TASSATIVO:\nTITOLO: [testo]\nTRAMA: [testo]\n---"
                         st.session_state.suggestions = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt_book}]).choices[0].message.content
                     else: st.session_state.suggestions = "NEGATIVE"
                 else: st.error("⚠️ Nessun dato trovato. Riprova.")
 
 # ==============================================================================
-# 5. DASHBOARD: RENDERING E STAMPA RISULTATI (PARSER REGEX INFALLIBILE)
+# 5. DASHBOARD: RENDERING E STAMPA RISULTATI
 # ==============================================================================
 if st.session_state.data is not None:
     st.markdown(f"<div class='white-title'>Report Chirurgico: {st.session_state.kw.upper()}</div>", unsafe_allow_html=True)
@@ -182,10 +194,7 @@ if st.session_state.data is not None:
     elif st.session_state.suggestions:
         st.success(f"✅ ANALISI POSITIVA! Ecco i titoli e le trame per '{st.session_state.kw}':")
         
-        # FIX: Puliamo il testo da eventuali grassetti markdown (**) generati dall'AI
         clean_suggestions = st.session_state.suggestions.replace("**", "")
-        
-        # FIX: Regex infallibile che cattura tutto quello che c'è tra "TITOLO:" e "TRAMA:"
         matches = re.findall(r'TITOLO:\s*(.*?)\s*TRAMA:\s*(.*?)(?=\nTITOLO:|\n---|---|$)', clean_suggestions, re.IGNORECASE | re.DOTALL)
         
         if matches:
@@ -197,6 +206,5 @@ if st.session_state.data is not None:
                 </div>
                 """, unsafe_allow_html=True)
         else:
-            # Fallback visivo se l'IA risponde in un formato completamente alieno
             st.warning("⚠️ L'Intelligenza Artificiale ha generato i suggerimenti ma in un formato anomalo. Ecco il testo grezzo:")
             st.write(st.session_state.suggestions)
