@@ -122,10 +122,8 @@ def get_amazon_data(domain, keyword, publisher_filter):
     WEBSCRAPINGAI_KEY = st.secrets.get("WEBSCRAPINGAI_KEY", "")
     
     def fetch_with_triple_fallback(p):
-        # IL SEGRETO: Se cerchiamo Independent, forziamo il nodo Amazon KDP via URL
         base_url = f"https://www.{domain}/s?k={keyword.replace(' ', '+')}&i=stripbooks&page={p}"
         if publisher_filter == "Independent":
-            # Parametro segreto Amazon per filtrare solo i libri "Independently published"
             amazon_url = base_url + "&rh=p_30%3AIndependently+published"
         else:
             amazon_url = base_url
@@ -144,7 +142,6 @@ def get_amazon_data(domain, keyword, publisher_filter):
         except: pass
         return None
 
-    # Estendiamo la ricerca a 20 pagine per garantire una buona pescata
     with ThreadPoolExecutor(max_workers=5) as executor:
         pages = list(executor.map(fetch_with_triple_fallback, range(1, 21)))
     
@@ -161,28 +158,24 @@ def get_amazon_data(domain, keyword, publisher_filter):
             
             text_full = item.get_text(separator=' ').lower()
             
-            # Determinazione Editore (se abbiamo usato l'hack URL, assumiamo sia Independent se non palese il contrario)
             is_self = "Publishing House"
             if publisher_filter == "Independent" or any(x in text_full for x in ['independently', 'kdp', 'indipendente', 'createspace', 'unabhängig']):
                 is_self = "Independent"
 
-            # Scarto immediato per risparmiare memoria
             if publisher_filter != "All Publishers" and is_self != publisher_filter:
                 continue
             
-            # Regex avanzata BSR
+            # --- INIZIO FIX CHIRURGICO BSR ---
             bsr = np.nan
-            bsr_match = re.search(r'(?:posizi\w*|rank|n\.|nr\.|#|n\.º)\s*:?\s*in\s+.*?(?:\n|\r|\Z)|(?:posizi\w*|rank|n\.|nr\.|#|n\.º)\s*:?\s*([0-9.,]+)', text_full)
+            # Regex infallibile per estrarre qualsiasi numero associato a classifiche/BSR multilingua (es. n. 1, #1, nr. 1, posizione 1, bestseller n. 1)
+            bsr_match = re.search(r'(?:bestseller\s*)?(?:n\.|nr\.|n\.º|n°|#|rank|posizione|pos\.)\s*:?\s*([0-9]{1,3}(?:[.,][0-9]{3})*|[0-9]+)', text_full)
             if bsr_match:
                 val = bsr_match.group(1)
-                if not val:
-                    val_match = re.search(r'([0-9]{1,3}(?:[.,][0-9]{3})+|[0-9]+)', text_full)
-                    if val_match: val = val_match.group(1)
                 if val:
                     try: bsr = float(val.replace('.', '').replace(',', ''))
                     except: pass
+            # --- FINE FIX CHIRURGICO BSR ---
 
-            # Recensioni
             reviews = 0
             rev_el = item.select_one('.a-icon-alt')
             if rev_el:
@@ -191,7 +184,6 @@ def get_amazon_data(domain, keyword, publisher_filter):
                     try: reviews = int(re.sub(r'[^\d]', '', rev_text_container.text))
                     except: pass
             
-            # Prezzo
             price = 0.0
             price_el = item.select_one('.a-price .a-offscreen')
             if price_el:
@@ -207,7 +199,6 @@ def get_amazon_data(domain, keyword, publisher_filter):
                 "Editore": is_self
             })
             
-            # Cap massimo aumentato
             if len(results) >= 150: break
             
     return pd.DataFrame(results)
@@ -292,7 +283,9 @@ else:
         
         nicchia_ai = st.text_input("Nicchia Individuata (dai dati) *", placeholder="es. Dieta Keto, Trading")
         target_ai = st.text_input("Definisci Target Lettore *", placeholder="es. Donne Over 50")
-        format_ai = st.selectbox("Formato Libro *", ["Manuale Pratico", "Saggio", "Guida Passo-Passo", "Workbook", "Romanzo", "Ricettario", "Biografia"])
+        
+        ai_cat_list = categories_map.get(st.session_state.selected_market, ["All Departments"])
+        format_ai = st.selectbox("Categoria Libro *", ai_cat_list)
         
         if st.button("🪄 Genera Pacchetto Editoriale", type="primary"):
             if not nicchia_ai or not target_ai:
