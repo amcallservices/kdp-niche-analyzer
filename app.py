@@ -11,7 +11,7 @@ import numpy as np
 # ==============================================================================
 # 1. DESIGN SYSTEM: PREMIUM SAAS DASHBOARD (DUAL-PANEL SEQUENZIALE)
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 12.4", page_icon="📈", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 12.5", page_icon="📈", layout="wide")
 
 st.markdown("""
     <style>
@@ -95,7 +95,7 @@ st.markdown("<div class='program-title'>KDP Market Intelligence Hub</div>", unsa
 # ==============================================================================
 # 2. GESTIONE STATO
 # ==============================================================================
-for key in ['raw_data', 'filtered_data', 'suggestions', 'search_kw', 'selected_market']:
+for key in ['raw_data', 'filtered_data', 'suggestions', 'search_category', 'selected_market']:
     if key not in st.session_state: st.session_state[key] = None
 
 # ==============================================================================
@@ -118,6 +118,12 @@ categories_map = {
     "amazon.de": ["Alle Kategorien", "Bücher", "Kindle-Shop", "Biografien & Erinnerungen", "Business & Karriere", "Comics & Mangas", "Computer & Internet", "Fachbücher", "Fantasy & Science Fiction", "Kochen & Genießen", "Krimi & Thriller", "Ratgeber", "Reise & Abenteuer", "Sport & Fitness"],
     "amazon.fr": ["Toutes nos boutiques", "Livres", "Boutique Kindle", "Art, Musique et Cinéma", "Bande dessinée", "Biographies et témoignages", "Cuisine et Vins", "Entreprise et Bourse", "Histoire", "Informatique et Internet", "Policiers et Suspense", "Romance et littérature sentimentale", "Santé, Forme et Diététique", "Science-Fiction et Fantasy"],
     "amazon.es": ["Todos los departamentos", "Libros", "Tienda Kindle", "Arte, cine y fotografía", "Biografías, diarios y hechos reales", "Cómics y manga", "Deportes y aire libre", "Economía y empresa", "Historia", "Hogar, manualidades y estilos de vida", "Informática, internet y medios digitales", "Policíaca, negra y suspense", "Romántica", "Salud, familia y desarrollo personal"]
+}
+
+# Traduzioni di fallback per la query vuota ("Tutte le categorie")
+fallback_keywords = {
+    "amazon.it": "libri", "amazon.com": "books", "amazon.co.uk": "books", 
+    "amazon.de": "bücher", "amazon.fr": "livres", "amazon.es": "libros"
 }
 
 # ==============================================================================
@@ -145,7 +151,7 @@ def get_amazon_data(domain, keyword):
         return None
 
     with ThreadPoolExecutor(max_workers=5) as executor:
-        pages = list(executor.map(fetch_with_triple_fallback, range(1, 8))) # Scansione equilibrata
+        pages = list(executor.map(fetch_with_triple_fallback, range(1, 8))) # Scansione
     
     results, seen = [], set()
     for html in pages:
@@ -185,7 +191,7 @@ def get_amazon_data(domain, keyword):
     return pd.DataFrame(results)
 
 # ==============================================================================
-# 5. MAIN SIDEBAR (FASE 1: RICERCA DATI)
+# 5. MAIN SIDEBAR (FASE 1: RICERCA DATI PER CATEGORIA)
 # ==============================================================================
 with st.sidebar:
     st.markdown("<p style='font-weight:700; color:#9ca3af; font-size:0.8rem; margin-bottom:5px; margin-top:0;'>STEP 1: MARKET DATA</p>", unsafe_allow_html=True)
@@ -196,27 +202,30 @@ with st.sidebar:
     
     # Categorie Dinamiche
     cat_list = categories_map.get(domain, ["All Departments"])
-    cat_choice = st.selectbox("Category", cat_list)
+    cat_choice = st.selectbox("Categoria", cat_list)
     
     pub_choice = st.selectbox("Publisher Type *", ["All Publishers", "Publishing House", "Independent"])
     
     st.markdown("---")
-    search_input = st.text_input("Enter Keyword *", placeholder="e.g., keto diet for beginners")
     
-    if st.button("🔍 Estrai Dati Mercato", type="primary"):
-        if not search_input: st.error("Inserisci una keyword da analizzare.")
-        else:
-            with st.spinner(f"Scraping in corso su {domain}..."):
-                df = get_amazon_data(domain, search_input)
-                if not df.empty:
-                    st.session_state.raw_data = df
-                    st.session_state.search_kw = search_input
-                    st.session_state.suggestions = None # Reset AI lab
-                else:
-                    st.error("Nessun dato trovato o blocco di rete temporaneo.")
+    if st.button("🔍 Estrai Dati Categoria", type="primary"):
+        with st.spinner(f"Scraping in corso su {domain} per la categoria '{cat_choice}'..."):
+            
+            # Definiamo la query di ricerca. Se è "Tutte le categorie", usiamo una parola generica come "Libri"
+            search_query = cat_choice
+            if search_query in ["Tutte le categorie", "All Departments", "Alle Kategorien", "Toutes nos boutiques", "Todos los departamentos"]:
+                search_query = fallback_keywords.get(domain, "books")
+
+            df = get_amazon_data(domain, search_query)
+            if not df.empty:
+                st.session_state.raw_data = df
+                st.session_state.search_category = cat_choice
+                st.session_state.suggestions = None # Reset AI lab
+            else:
+                st.error("Nessun dato trovato o blocco di rete temporaneo.")
                     
     if st.button("🔄 Reset Dati"):
-        for key in ['raw_data', 'filtered_data', 'suggestions', 'search_kw']: st.session_state[key] = None
+        for key in ['raw_data', 'filtered_data', 'suggestions', 'search_category']: st.session_state[key] = None
         st.rerun()
 
 # ==============================================================================
@@ -233,7 +242,7 @@ else:
 
     # --- COLONNA SINISTRA: RISULTATI E TABELLA ---
     with col_data:
-        st.markdown(f"<div class='section-title'>Dati Estratti: <span style='color: #2563eb;'>'{st.session_state.search_kw}'</span></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='section-title'>Dati Estratti: <span style='color: #2563eb;'>{st.session_state.search_category}</span></div>", unsafe_allow_html=True)
         
         if not df.empty:
             c1, c2, c3 = st.columns(3)
@@ -242,7 +251,7 @@ else:
             c3.metric("Recensioni Medie", f"{int(df['Recensioni'].mean())}")
             
             st.markdown("<br>", unsafe_allow_html=True)
-            # Mostra chiaramente la tabella dati
+            # Mostra chiaramente la tabella dati per l'analisi visiva
             st.dataframe(df[['Titolo', 'BSR', 'Prezzo', 'Recensioni', 'Editore']], use_container_width=True, height=600, hide_index=True)
         else:
             st.warning(f"Nessun libro trovato per il filtro autore selezionato.")
@@ -252,30 +261,32 @@ else:
         st.markdown("<div class='ai-panel'>", unsafe_allow_html=True)
         st.markdown("<p style='font-weight:700; color:#9ca3af; font-size:0.8rem; margin-bottom:5px; margin-top:0;'>STEP 2: IDEAZIONE</p>", unsafe_allow_html=True)
         st.markdown("<div class='section-title' style='margin-top:0;'>✨ AI Strategy Lab</div>", unsafe_allow_html=True)
-        st.markdown("<p style='font-size:0.9rem; color:#4b5563;'>Valuta i dati a sinistra. Se la nicchia ti sembra interessante, inserisci il target e genera la strategia editoriale.</p>", unsafe_allow_html=True)
+        st.markdown("<p style='font-size:0.9rem; color:#4b5563;'>Dopo aver analizzato visivamente i dati a sinistra, inserisci la nicchia individuata e genera la strategia.</p>", unsafe_allow_html=True)
         
         st.markdown("<br>", unsafe_allow_html=True)
+        
+        # NUOVO INPUT: Nicchia individuata manualmente dall'utente
+        nicchia_ai = st.text_input("Nicchia Individuata (dai dati) *", placeholder="es. Dieta Keto, Trading per principianti")
         target_ai = st.text_input("Definisci Target Lettore *", placeholder="es. Donne Over 50, Programmatori Junior")
         format_ai = st.selectbox("Formato Libro *", ["Manuale Pratico", "Saggio", "Guida Passo-Passo", "Workbook", "Romanzo", "Ricettario", "Biografia"])
         
         if st.button("🪄 Genera Pacchetto Editoriale", type="primary"):
             if df.empty:
                 st.error("Estrai prima dei dati validi a sinistra.")
-            elif not target_ai:
-                st.error("Inserisci il Target Lettore per generare idee specifiche.")
+            elif not nicchia_ai or not target_ai:
+                st.error("Inserisci sia la Nicchia che il Target Lettore.")
             else:
-                with st.spinner("L'AI sta analizzando la competizione e generando le idee..."):
+                with st.spinner("L'AI sta generando le idee..."):
                     client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
                     prompt_book = f"""
                     Agisci come un Publisher di successo su Amazon {domain}. 
-                    Keyword di partenza: '{st.session_state.search_kw}'. 
-                    Categoria: {cat_choice}. 
+                    L'utente ha esplorato la Categoria: '{cat_choice}' e ha individuato la seguente Nicchia: '{nicchia_ai}'. 
                     Target Lettore: {target_ai}. 
                     Formato Libro: {format_ai}.
                     
-                    Basandoti su queste informazioni, genera 3 idee di libri ottimizzati. 
-                    Devono risolvere i problemi del target e differenziarsi.
-                    Formato TASSATIVO:
+                    Basandoti su queste informazioni, genera 3 idee di libri altamente ottimizzati per vendere su Amazon. 
+                    Devono risolvere i problemi del target e differenziarsi dalla concorrenza.
+                    Formato TASSATIVO (non inserire commenti extra):
                     TITOLO: [Titolo magnetico principale]
                     SOTTOTITOLO: [Sottotitolo SEO ottimizzato]
                     TRAMA: [Sinossi persuasiva di 3-4 righe]
