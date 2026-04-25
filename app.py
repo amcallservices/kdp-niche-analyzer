@@ -8,100 +8,110 @@ import openai
 from concurrent.futures import ThreadPoolExecutor
 
 # ==============================================================================
-# 1. DESIGN SYSTEM: MODERN SAAS DASHBOARD
+# 1. DESIGN SYSTEM: PREMIUM SAAS DASHBOARD (ISPIRATO AI MODERNI TOOL SEO)
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 12.0", page_icon="📊", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 12.1", page_icon="📈", layout="wide")
 
 st.markdown("""
     <style>
-        /* Base Streamlit Overrides */
+        /* RIMOZIONE ELEMENTI DISTURBANTI STREAMLIT */
         #MainMenu {visibility: hidden;}
         header {visibility: hidden;}
         footer {visibility: hidden;}
         .stAppHeader {display:none;}
         [data-testid="collapsedControl"] { display: none !important; }
 
-        /* App Background */
+        /* SFONDO DASHBOARD PRINCIPALE */
         .stApp {
-            background-color: #f3f4f6;
+            background-color: #f9fafb !important; /* Grigio chiarissimo in stile SaaS */
         }
 
-        /* Sidebar: Deep Professional Indigo */
+        /* SIDEBAR - STILE DARK MODE MODERNO */
         section[data-testid="stSidebar"] { 
-            background-color: #1e1e2f !important; 
-            min-width: 400px !important;
-            border-right: 1px solid #2d2d44;
+            background-color: #1f2937 !important; /* Grigio antracite profondo */
+            min-width: 380px !important;
+            border-right: 1px solid #374151;
             padding-top: 2rem;
         }
         section[data-testid="stSidebar"] * { 
-            color: #f8f9fa !important; 
+            color: #f3f4f6 !important; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
         }
         
-        /* Sidebar inputs styling */
+        /* INPUT E SELECTBOX NELLA SIDEBAR */
         .stTextInput input, .stSelectbox div[data-baseweb="select"] {
-            background-color: #2d2d44 !important;
-            border: 1px solid #4b4b63 !important;
+            background-color: #374151 !important;
+            border: 1px solid #4b5563 !important;
             color: white !important;
-            border-radius: 6px;
+            border-radius: 8px !important;
+            padding: 0.5rem !important;
         }
-        
-        /* Main Area Typography */
+        .stTextInput input:focus, .stSelectbox div[data-baseweb="select"]:focus {
+            border-color: #3b82f6 !important; /* Blu focus */
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) !important;
+        }
+
+        /* TITOLI PRINCIPALI */
         .program-title { 
             color: #111827 !important; 
             font-size: 2.2rem !important; 
             font-weight: 800; 
             text-align: left; 
+            margin-top: 1rem;
             margin-bottom: 2rem; 
             padding-bottom: 1rem;
-            border-bottom: 2px solid #e5e7eb;
+            border-bottom: 1px solid #e5e7eb;
             letter-spacing: -0.025em;
         }
         .white-title { 
             color: #374151 !important; 
-            font-size: 1.5rem !important; 
+            font-size: 1.4rem !important; 
             font-weight: 700; 
+            margin-top: 2rem;
             margin-bottom: 1rem; 
         }
 
-        /* Metrics Styling */
+        /* WIDGET METRICHE (KPI CARDS) */
         [data-testid="stMetricValue"] { 
-            color: #2563eb !important; 
-            font-weight: 700 !important; 
-            font-size: 2rem !important;
+            color: #2563eb !important; /* Blu primario */
+            font-weight: 800 !important; 
+            font-size: 2.2rem !important;
         }
         [data-testid="stMetricLabel"] p {
             color: #6b7280 !important;
             font-weight: 600 !important;
             text-transform: uppercase;
             font-size: 0.85rem;
+            letter-spacing: 0.05em;
         }
         .stMetric { 
             background-color: white !important; 
             border: 1px solid #e5e7eb; 
-            padding: 20px; 
+            padding: 1.5rem; 
             border-radius: 12px; 
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            text-align: center;
         }
 
-        /* Dataframe Styling */
+        /* TABELLA DATI GREZZI */
         [data-testid="stDataFrame"] {
             background-color: white;
             padding: 1rem;
             border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
             border: 1px solid #e5e7eb;
         }
 
-        /* Strategy Cards */
+        /* CARDS OUTPUT STRATEGICO */
         .ebook-card {
             background-color: white; 
             border: 1px solid #e5e7eb; 
-            border-left: 4px solid #2563eb; 
-            padding: 24px; 
+            border-left: 4px solid #3b82f6; /* Accent Blu */
+            padding: 1.5rem; 
             border-radius: 12px; 
             margin-bottom: 1.5rem; 
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-            transition: transform 0.2s ease-in-out;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
         .ebook-card:hover {
             transform: translateY(-2px);
@@ -111,32 +121,44 @@ st.markdown("""
             color: #111827 !important; 
             font-weight: 800; 
             font-size: 1.25rem; 
-            margin-bottom: 12px; 
+            margin-bottom: 0.75rem; 
         }
         .ebook-plot { 
             color: #4b5563 !important; 
-            line-height: 1.7; 
+            line-height: 1.6; 
             font-size: 1rem; 
         }
 
-        /* Buttons */
+        /* PULSANTI CALL TO ACTION */
         .stButton button {
-            border-radius: 6px !important;
+            border-radius: 8px !important;
             font-weight: 600 !important;
-            padding: 0.5rem 1rem !important;
+            padding: 0.6rem 1.2rem !important;
+            border: 1px solid #4b5563 !important;
+            background-color: transparent !important;
+            color: white !important;
+            transition: all 0.2s ease;
         }
+        .stButton button:hover {
+            background-color: #374151 !important;
+            border-color: #6b7280 !important;
+        }
+        /* Pulsante Primario */
         button[kind="primary"] {
-            background-color: #2563eb !important;
+            background-color: #2563eb !important; /* Blu Action */
             color: white !important;
             border: none !important;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06) !important;
         }
         button[kind="primary"]:hover {
             background-color: #1d4ed8 !important;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
         }
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='program-title'>KDP Market Intelligence</div>", unsafe_allow_html=True)
+# Intestazione visibile
+st.markdown("<div class='program-title'>KDP Market Intelligence Hub</div>", unsafe_allow_html=True)
 
 # ==============================================================================
 # 2. GESTIONE MEMORIA (PERSISTENZA)
@@ -198,12 +220,12 @@ def get_amazon_data(mkt, keyword):
                 try: price = float(re.sub(r'[^\d.,]', '', price_el.text).replace(',', '.'))
                 except: price = 0.0
             seen.add(title)
-            results.append({"Titolo Analizzato": title, "Prezzo": price, "BSR": bsr, "Editore": is_self})
+            results.append({"Titolo": title, "Prezzo": price, "BSR": bsr, "Editore": is_self})
             if len(results) >= 100: break
     return pd.DataFrame(results)
 
 # ==============================================================================
-# 4. SIDEBAR: PARAMETRI E GENERAZIONE AI
+# 4. SIDEBAR: COMMAND CENTER
 # ==============================================================================
 with st.sidebar:
     st.markdown("### 🔍 Parametri di Ricerca")
@@ -218,16 +240,16 @@ with st.sidebar:
         "Scienze sociali", "Sport e tempo libero", "Storia", "Viaggi", "Test di preparazione"
     ]
     categoria_selezionata = st.selectbox("Categoria Amazon", amazon_categories)
-    genere = st.selectbox("Formato / Sotto-Genere", ["Saggio Scientifico", "Quiz Scientifico", "Manuale Tecnico", "Test Prep", "Religioso", "Spirituale", "Meditazione", "Business", "Romanzo Rosa", "Thriller", "Fantasy", "Fantascienza", "Psicologia", "Biografia", "Ricettario"])
+    genere = st.selectbox("Formato / Genere KDP", ["Saggio Scientifico", "Quiz Scientifico", "Manuale Tecnico", "Test Prep", "Religioso", "Spirituale", "Meditazione", "Business", "Romanzo Rosa", "Thriller", "Fantasy", "Fantascienza", "Psicologia", "Biografia", "Ricettario"])
     nicchia = st.text_input("Nicchia specifica (es. Dieta Keto)")
     target = st.text_input("Target Lettore (es. Donne Over 50)")
     
     st.markdown("---")
     
-    if st.button("Genera Keyword Semantiche", use_container_width=True):
+    if st.button("🪄 Genera Keyword Semantiche", use_container_width=True):
         if not nicchia or not target: st.error("Inserisci nicchia e target!")
         else:
-            with st.spinner("Estrazione..."):
+            with st.spinner("Estrazione NLP..."):
                 client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
                 prompt_kw = (
                     f"Agisci come esperto SEO Amazon specializzato nella categoria '{categoria_selezionata}'. "
@@ -240,11 +262,11 @@ with st.sidebar:
                 st.session_state.suggested_kws = res.choices[0].message.content
 
     if st.session_state.suggested_kws:
-        st.success("Keyword generate con successo.")
+        st.success("Analisi Semantica Completata.")
         st.info(st.session_state.suggested_kws)
-        kw_selezionata = st.text_input("Keyword da analizzare:", value=st.session_state.suggested_kws.split(',')[0].strip())
+        kw_selezionata = st.text_input("Seleziona Keyword Target:", value=st.session_state.suggested_kws.split(',')[0].strip())
         
-        if st.button("Esegui Analisi Mercato", type="primary", use_container_width=True):
+        if st.button("🚀 Esegui Analisi Mercato", type="primary", use_container_width=True):
             with st.spinner("Scraping dati in corso..."):
                 df = get_amazon_data("Italia", kw_selezionata)
                 if not df.empty:
@@ -260,16 +282,17 @@ with st.sidebar:
                 else: st.error("⚠️ Nessun dato trovato. Riprova.")
                 
     st.markdown("---")
-    if st.button("Reset Sessione", use_container_width=True):
+    if st.button("🔄 Reset Dashboard", use_container_width=True):
         st.session_state.data, st.session_state.suggestions, st.session_state.suggested_kws = None, None, ""
         st.rerun()
 
 # ==============================================================================
-# 5. DASHBOARD: RENDERING RISULTATI (PARSER REGEX)
+# 5. DASHBOARD: RENDERING RISULTATI
 # ==============================================================================
 if st.session_state.data is not None:
-    st.markdown(f"<div class='white-title'>Analisi Dati: {st.session_state.kw}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='white-title'>Analisi Dati: <span style='color: #2563eb;'>{st.session_state.kw.upper()}</span></div>", unsafe_allow_html=True)
     
+    # Layout a colonne per le metriche stile KPI Dashboard
     c1, c2, c3 = st.columns(3)
     c1.metric("Prezzo Medio", f"{st.session_state.data['Prezzo'].mean():.2f} €")
     indie_p = (len(st.session_state.data[st.session_state.data['Editore'] == "Sì (Self-Pub)"]) / len(st.session_state.data)) * 100
@@ -278,16 +301,18 @@ if st.session_state.data is not None:
     
     st.markdown("<br>", unsafe_allow_html=True)
 
-    with st.expander("Visualizza Dati Grezzi", expanded=False):
+    # Dati in un expander nativo di Streamlit per mantenere l'interfaccia pulita
+    with st.expander("📊 Visualizza Dati Grezzi Mercato (Top 100)", expanded=False):
         st.dataframe(st.session_state.data, use_container_width=True, hide_index=True)
 
     st.markdown("---")
 
     if st.session_state.suggestions == "NEGATIVE":
-        st.error(f"❌ ANALISI NEGATIVA: La keyword '{st.session_state.kw}' non è profittevole secondo i criteri strategici.")
+        st.error(f"❌ ANALISI NEGATIVA: La keyword '{st.session_state.kw}' non soddisfa i criteri minimi di profittabilità del framework. Si consiglia di esplorare un'altra nicchia.")
     elif st.session_state.suggestions:
-        st.markdown(f"<div class='white-title'>Output Strategico</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='white-title'>Output Strategico Generato</div>", unsafe_allow_html=True)
         
+        # Regex infallibile per estrarre le risposte dell'AI
         clean_suggestions = st.session_state.suggestions.replace("**", "")
         matches = re.findall(r'TITOLO:\s*(.*?)\s*TRAMA:\s*(.*?)(?=\nTITOLO:|\n---|---|$)', clean_suggestions, re.IGNORECASE | re.DOTALL)
         
@@ -300,5 +325,5 @@ if st.session_state.data is not None:
                 </div>
                 """, unsafe_allow_html=True)
         else:
-            st.warning("⚠️ Formato AI anomalo. Testo grezzo:")
+            st.warning("⚠️ Formato AI non riconosciuto. Ecco il testo grezzo:")
             st.write(st.session_state.suggestions)
