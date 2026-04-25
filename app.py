@@ -11,7 +11,7 @@ import numpy as np
 # ==============================================================================
 # 1. DESIGN SYSTEM E CONFIGURAZIONE
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 12.6", page_icon="📈", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 12.7", page_icon="📈", layout="wide")
 
 st.markdown("""
     <style>
@@ -91,7 +91,7 @@ st.markdown("<div class='program-title'>KDP Market Intelligence Hub</div>", unsa
 # ==============================================================================
 # 2. GESTIONE STATO
 # ==============================================================================
-for key in ['raw_data', 'suggestions', 'search_category', 'selected_market']:
+for key in ['raw_data', 'suggestions', 'search_category', 'selected_market', 'pub_filter']:
     if key not in st.session_state: st.session_state[key] = None
 
 # ==============================================================================
@@ -121,9 +121,9 @@ fallback_keywords = {
 }
 
 # ==============================================================================
-# 4. MOTORE DI SCRAPING
+# 4. MOTORE DI SCRAPING (CON FILTRO PREVENTIVO)
 # ==============================================================================
-def get_amazon_data(domain, keyword):
+def get_amazon_data(domain, keyword, publisher_filter):
     ANT_KEY = "5a93911a587c4aff8d8dc7f2af9ea0db"
     SCRAPERAPI_KEY = st.secrets.get("SCRAPERAPI_KEY", "")
     WEBSCRAPINGAI_KEY = st.secrets.get("WEBSCRAPINGAI_KEY", "")
@@ -144,8 +144,9 @@ def get_amazon_data(domain, keyword):
         except: pass
         return None
 
+    # Aumentato il range a 12 pagine per avere più margine quando si filtrano molti libri
     with ThreadPoolExecutor(max_workers=5) as executor:
-        pages = list(executor.map(fetch_with_triple_fallback, range(1, 8)))
+        pages = list(executor.map(fetch_with_triple_fallback, range(1, 12)))
     
     results, seen = [], set()
     for html in pages:
@@ -159,6 +160,13 @@ def get_amazon_data(domain, keyword):
             
             text = item.get_text(separator=' ').lower()
             
+            # Controllo Editore
+            is_self = "Independent" if any(x in text for x in ['independently', 'kdp', 'indipendente', 'createspace', 'unabhängig']) else "Publishing House"
+            
+            # FILTRO PREVENTIVO: Scarta subito il libro se non corrisponde alla scelta
+            if publisher_filter != "All Publishers" and is_self != publisher_filter:
+                continue
+            
             bsr_match = re.search(r'(?:n\.|nr\.|n\.º|#|rank)\s*([0-9.,]+)', text)
             bsr = float(bsr_match.group(1).replace('.', '').replace(',', '')) if bsr_match else np.nan
             
@@ -169,8 +177,6 @@ def get_amazon_data(domain, keyword):
                 if rev_text_container:
                     try: reviews = int(re.sub(r'[^\d]', '', rev_text_container.text))
                     except: pass
-            
-            is_self = "Independent" if any(x in text for x in ['independently', 'kdp', 'indipendente', 'createspace', 'unabhängig']) else "Publishing House"
             
             price = 0.0
             price_el = item.select_one('.a-price .a-offscreen')
@@ -204,16 +210,23 @@ with st.sidebar:
         with st.spinner(f"Scraping in corso su {domain}..."):
             search_query = fallback_keywords.get(domain, "books") if cat_choice in ["Tutte le categorie", "All Departments", "Alle Kategorien", "Toutes nos boutiques", "Todos los departamentos"] else cat_choice
             
-            df = get_amazon_data(domain, search_query)
+            # Passiamo il filtro autore direttamente allo scraper
+            df = get_amazon_data(domain, search_query, pub_choice)
+            
             if not df.empty:
                 st.session_state.raw_data = df
                 st.session_state.search_category = cat_choice
+                st.session_state.pub_filter = pub_choice
                 st.session_state.suggestions = None 
             else:
-                st.error("Nessun dato trovato. Riprova.")
+                # Messaggio di errore più specifico
+                if pub_choice != "All Publishers":
+                    st.error(f"Nessun libro di tipo '{pub_choice}' trovato nelle prime pagine di questa categoria. Prova 'All Publishers'.")
+                else:
+                    st.error("Nessun dato trovato. Riprova.")
                     
     if st.button("🔄 Reset Dati"):
-        for key in ['raw_data', 'suggestions', 'search_category']: st.session_state[key] = None
+        for key in ['raw_data', 'suggestions', 'search_category', 'pub_filter']: st.session_state[key] = None
         st.rerun()
 
 # ==============================================================================
@@ -222,28 +235,22 @@ with st.sidebar:
 if st.session_state.raw_data is None:
     st.markdown("<div class='empty-state'>🚀 Usa il pannello laterale per selezionare il Marketplace, la categoria e avviare l'estrazione dati.</div>", unsafe_allow_html=True)
 else:
-    # 1. Filtro dei dati in base alla scelta della sidebar (in tempo reale)
     df_to_show = st.session_state.raw_data
-    if pub_choice != "All Publishers":
-        df_to_show = df_to_show[df_to_show['Editore'] == pub_choice]
 
     col_data, col_ai = st.columns([6, 4], gap="large")
 
     # --- COLONNA SINISTRA: TABELLA ---
     with col_data:
-        st.markdown(f"<div class='section-title'>Dati Estratti: <span style='color: #2563eb;'>{st.session_state.search_category}</span></div>", unsafe_allow_html=True)
+        filter_text = f" ({st.session_state.pub_filter})" if st.session_state.pub_filter != "All Publishers" else ""
+        st.markdown(f"<div class='section-title'>Dati Estratti: <span style='color: #2563eb;'>{st.session_state.search_category}</span>{filter_text}</div>", unsafe_allow_html=True)
         
-        if not df_to_show.empty:
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Libri Rilevati", len(df_to_show))
-            c2.metric("Prezzo Medio", f"{df_to_show['Prezzo'].mean():.2f} €")
-            c3.metric("Recensioni Medie", f"{int(df_to_show['Recensioni'].mean())}")
-            
-            st.markdown("<br>", unsafe_allow_html=True)
-            # Mostra la tabella
-            st.dataframe(df_to_show[['Titolo', 'BSR', 'Prezzo', 'Recensioni', 'Editore']], use_container_width=True, height=600, hide_index=True)
-        else:
-            st.warning("Nessun libro trovato per questo tipo di autore in questa estrazione.")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Libri Rilevati", len(df_to_show))
+        c2.metric("Prezzo Medio", f"{df_to_show['Prezzo'].mean():.2f} €")
+        c3.metric("Recensioni Medie", f"{int(df_to_show['Recensioni'].mean())}")
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.dataframe(df_to_show[['Titolo', 'BSR', 'Prezzo', 'Recensioni', 'Editore']], use_container_width=True, height=600, hide_index=True)
 
     # --- COLONNA DESTRA: AI LAB ---
     with col_ai:
