@@ -23,7 +23,7 @@ st.markdown("""
 
         /* App Background */
         .stApp {
-            background-color: #f3f4f6; /* Very light gray */
+            background-color: #f3f4f6;
         }
 
         /* Sidebar: Deep Professional Indigo */
@@ -36,6 +36,7 @@ st.markdown("""
         section[data-testid="stSidebar"] * { 
             color: #f8f9fa !important; 
         }
+        
         /* Sidebar inputs styling */
         .stTextInput input, .stSelectbox div[data-baseweb="select"] {
             background-color: #2d2d44 !important;
@@ -64,7 +65,7 @@ st.markdown("""
 
         /* Metrics Styling */
         [data-testid="stMetricValue"] { 
-            color: #2563eb !important; /* Tech Blue */
+            color: #2563eb !important; 
             font-weight: 700 !important; 
             font-size: 2rem !important;
         }
@@ -95,7 +96,7 @@ st.markdown("""
         .ebook-card {
             background-color: white; 
             border: 1px solid #e5e7eb; 
-            border-left: 4px solid #2563eb; /* Blue accent line */
+            border-left: 4px solid #2563eb; 
             padding: 24px; 
             border-radius: 12px; 
             margin-bottom: 1.5rem; 
@@ -124,7 +125,6 @@ st.markdown("""
             font-weight: 600 !important;
             padding: 0.5rem 1rem !important;
         }
-        /* Primary Button Override */
         button[kind="primary"] {
             background-color: #2563eb !important;
             color: white !important;
@@ -148,7 +148,7 @@ if 'score' not in st.session_state: st.session_state.score = 0
 if 'suggested_kws' not in st.session_state: st.session_state.suggested_kws = ""
 
 # ==============================================================================
-# 3. MOTORE DI SCRAPING TRIPLE-FALLBACK (ANTI-BLOCCO) - INTATTO
+# 3. MOTORE DI SCRAPING TRIPLE-FALLBACK (ANTI-BLOCCO)
 # ==============================================================================
 def get_amazon_data(mkt, keyword):
     domains = {"Italia": "amazon.it", "USA": "amazon.com", "Spagna": "amazon.es", "Francia": "amazon.fr", "Germania": "amazon.de"}
@@ -203,7 +203,7 @@ def get_amazon_data(mkt, keyword):
     return pd.DataFrame(results)
 
 # ==============================================================================
-# 4. SIDEBAR CON CATEGORIE E GENERAZIONE
+# 4. SIDEBAR: PARAMETRI E GENERAZIONE AI
 # ==============================================================================
 with st.sidebar:
     st.markdown("### 🔍 Parametri di Ricerca")
@@ -224,7 +224,7 @@ with st.sidebar:
     
     st.markdown("---")
     
-    if st.button("Genera Keyword Semantic", use_container_width=True):
+    if st.button("Genera Keyword Semantiche", use_container_width=True):
         if not nicchia or not target: st.error("Inserisci nicchia e target!")
         else:
             with st.spinner("Estrazione..."):
@@ -265,12 +265,11 @@ with st.sidebar:
         st.rerun()
 
 # ==============================================================================
-# 5. DASHBOARD: RENDERING E STAMPA RISULTATI
+# 5. DASHBOARD: RENDERING RISULTATI (PARSER REGEX)
 # ==============================================================================
 if st.session_state.data is not None:
     st.markdown(f"<div class='white-title'>Analisi Dati: {st.session_state.kw}</div>", unsafe_allow_html=True)
     
-    # Layout a colonne per le metriche in stile Dashboard
     c1, c2, c3 = st.columns(3)
     c1.metric("Prezzo Medio", f"{st.session_state.data['Prezzo'].mean():.2f} €")
     indie_p = (len(st.session_state.data[st.session_state.data['Editore'] == "Sì (Self-Pub)"]) / len(st.session_state.data)) * 100
@@ -279,14 +278,13 @@ if st.session_state.data is not None:
     
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Dati in un expander per mantenere l'interfaccia pulita
-    with st.expander("Visualizza Dati Grezzi (Top 100)", expanded=False):
+    with st.expander("Visualizza Dati Grezzi", expanded=False):
         st.dataframe(st.session_state.data, use_container_width=True, hide_index=True)
 
     st.markdown("---")
 
     if st.session_state.suggestions == "NEGATIVE":
-        st.error(f"❌ ANALISI NEGATIVA: La keyword '{st.session_state.kw}' non soddisfa i criteri minimi di profittabilità del framework.")
+        st.error(f"❌ ANALISI NEGATIVA: La keyword '{st.session_state.kw}' non è profittevole secondo i criteri strategici.")
     elif st.session_state.suggestions:
         st.markdown(f"<div class='white-title'>Output Strategico</div>", unsafe_allow_html=True)
         
@@ -302,22 +300,5 @@ if st.session_state.data is not None:
                 </div>
                 """, unsafe_allow_html=True)
         else:
-            st.warning("Formato risposta AI non standard:")
-            st.write(st.session_state.suggestions)ord '{st.session_state.kw}' non è profittevole secondo i criteri strategici.")
-    elif st.session_state.suggestions:
-        st.success(f"✅ ANALISI POSITIVA! Ecco i titoli e le trame per '{st.session_state.kw}':")
-        
-        clean_suggestions = st.session_state.suggestions.replace("**", "")
-        matches = re.findall(r'TITOLO:\s*(.*?)\s*TRAMA:\s*(.*?)(?=\nTITOLO:|\n---|---|$)', clean_suggestions, re.IGNORECASE | re.DOTALL)
-        
-        if matches:
-            for t_clean, p_clean in matches:
-                st.markdown(f"""
-                <div class="ebook-card">
-                    <div class="ebook-title">📘 {t_clean.strip()}</div>
-                    <div class="ebook-plot"><b>Strategia Editoriale:</b> {p_clean.strip()}</div>
-                </div>
-                """, unsafe_allow_html=True)
-        else:
-            st.warning("⚠️ L'Intelligenza Artificiale ha generato i suggerimenti ma in un formato anomalo. Ecco il testo grezzo:")
+            st.warning("⚠️ Formato AI anomalo. Testo grezzo:")
             st.write(st.session_state.suggestions)
