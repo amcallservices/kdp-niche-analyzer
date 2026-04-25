@@ -9,9 +9,9 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 
 # ==============================================================================
-# 1. DESIGN SYSTEM: PREMIUM SAAS DASHBOARD
+# 1. DESIGN SYSTEM: PREMIUM SAAS DASHBOARD (DUAL-PANEL)
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 12.2", page_icon="📈", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 12.3", page_icon="📈", layout="wide")
 
 st.markdown("""
     <style>
@@ -23,131 +23,91 @@ st.markdown("""
 
         .stApp { background-color: #f9fafb !important; }
 
+        /* MAIN SIDEBAR (LEFT) */
         section[data-testid="stSidebar"] { 
             background-color: #1f2937 !important; 
-            min-width: 380px !important;
+            min-width: 320px !important;
             border-right: 1px solid #374151;
-            padding-top: 2rem;
+            padding-top: 1rem;
         }
         section[data-testid="stSidebar"] * { 
             color: #f3f4f6 !important; 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
         }
         
+        /* INPUT STYLES */
         .stTextInput input, .stSelectbox div[data-baseweb="select"] {
             background-color: #374151 !important;
             border: 1px solid #4b5563 !important;
             color: white !important;
-            border-radius: 8px !important;
-            padding: 0.5rem !important;
+            border-radius: 6px !important;
         }
 
+        /* TITLES */
         .program-title { 
             color: #111827 !important; 
-            font-size: 2.2rem !important; 
+            font-size: 2rem !important; 
             font-weight: 800; 
-            text-align: left; 
-            margin-top: 1rem;
-            margin-bottom: 2rem; 
-            padding-bottom: 1rem;
-            border-bottom: 1px solid #e5e7eb;
-            letter-spacing: -0.025em;
-        }
-        .white-title { 
-            color: #374151 !important; 
-            font-size: 1.4rem !important; 
-            font-weight: 700; 
-            margin-top: 2rem;
             margin-bottom: 1rem; 
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 0.5rem;
+        }
+        .section-title {
+            color: #374151 !important; 
+            font-size: 1.2rem !important; 
+            font-weight: 700; 
+            margin-bottom: 1rem;
+            margin-top: 1rem;
         }
 
-        [data-testid="stMetricValue"] { 
-            color: #2563eb !important; 
-            font-weight: 800 !important; 
-            font-size: 2rem !important;
-        }
-        [data-testid="stMetricLabel"] p {
-            color: #6b7280 !important;
-            font-weight: 600 !important;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-            letter-spacing: 0.05em;
-        }
-        .stMetric { 
-            background-color: white !important; 
-            border: 1px solid #e5e7eb; 
-            padding: 1.5rem; 
-            border-radius: 12px; 
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
-            text-align: center;
-        }
+        /* METRICS */
+        [data-testid="stMetricValue"] { color: #2563eb !important; font-weight: 800 !important; font-size: 1.8rem !important; }
+        [data-testid="stMetricLabel"] p { color: #6b7280 !important; font-weight: 600 !important; text-transform: uppercase; font-size: 0.8rem; }
+        .stMetric { background-color: white !important; border: 1px solid #e5e7eb; padding: 1rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
 
+        /* DATAFRAME */
         [data-testid="stDataFrame"] {
+            background-color: white; padding: 1rem; border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: 1px solid #e5e7eb;
+        }
+
+        /* AI RIGHT PANEL (Simulated 2nd Sidebar) */
+        .ai-panel {
             background-color: white;
-            padding: 1rem;
-            border-radius: 12px;
-            box-shadow: 0 1px 3px 0 rgba(0,0,0,0.1);
+            padding: 1.5rem;
+            border-radius: 8px;
             border: 1px solid #e5e7eb;
-        }
-
-        .ebook-card {
-            background-color: white; 
-            border: 1px solid #e5e7eb; 
-            border-left: 4px solid #3b82f6; 
-            padding: 1.5rem; 
-            border-radius: 12px; 
-            margin-bottom: 1.5rem; 
             box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
-            transition: transform 0.2s ease;
+            height: 100%;
         }
-        .ebook-card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
-        .ebook-title { color: #111827 !important; font-weight: 800; font-size: 1.25rem; margin-bottom: 0.5rem; }
-        .ebook-subtitle { color: #4b5563 !important; font-weight: 600; font-size: 1rem; margin-bottom: 1rem; font-style: italic; }
-        .ebook-plot { color: #374151 !important; line-height: 1.6; font-size: 0.95rem; }
 
-        .stButton button {
-            border-radius: 8px !important;
-            font-weight: 600 !important;
-            padding: 0.6rem 1.2rem !important;
-            border: 1px solid #4b5563 !important;
-            background-color: transparent !important;
-            color: white !important;
-            transition: all 0.2s ease;
+        /* EBOOK CARDS */
+        .ebook-card {
+            background-color: white; border: 1px solid #e5e7eb; border-left: 4px solid #3b82f6; 
+            padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
-        .stButton button:hover { background-color: #374151 !important; }
-        button[kind="primary"] {
-            background-color: #2563eb !important; 
-            color: white !important;
-            border: none !important;
-            box-shadow: 0 1px 3px 0 rgba(0,0,0,0.1) !important;
-        }
+        .ebook-title { color: #111827 !important; font-weight: 800; font-size: 1.1rem; margin-bottom: 0.5rem; }
+        .ebook-plot { color: #4b5563 !important; font-size: 0.95rem; }
+
+        /* BUTTONS */
+        .stButton button { border-radius: 6px !important; font-weight: 600 !important; }
+        button[kind="primary"] { background-color: #2563eb !important; color: white !important; border: none !important; }
         button[kind="primary"]:hover { background-color: #1d4ed8 !important; }
-        
-        .badge {
-            display: inline-block; padding: 0.25em 0.6em; font-size: 75%; font-weight: 700; 
-            line-height: 1; text-align: center; white-space: nowrap; vertical-align: baseline; 
-            border-radius: 0.25rem; color: white; margin-bottom: 10px;
-        }
-        .badge-green { background-color: #10b981; }
-        .badge-yellow { background-color: #f59e0b; }
-        .badge-red { background-color: #ef4444; }
     </style>
 """, unsafe_allow_html=True)
 
 st.markdown("<div class='program-title'>KDP Market Intelligence Hub</div>", unsafe_allow_html=True)
 
 # ==============================================================================
-# 2. GESTIONE MEMORIA E STATO
+# 2. GESTIONE STATO
 # ==============================================================================
-for key in ['data', 'suggestions', 'kw', 'score', 'suggested_kws', 'demand', 'difficulty', 'reviews']:
+for key in ['raw_data', 'filtered_data', 'suggestions', 'search_kw', 'score']:
     if key not in st.session_state: st.session_state[key] = None if key != 'score' else 0
 
 # ==============================================================================
-# 3. MOTORE DI SCRAPING POTENZIATO CON RECENSIONI
+# 3. MOTORE DI SCRAPING
 # ==============================================================================
-def get_amazon_data(mkt, keyword):
-    domains = {"Italia": "amazon.it", "USA": "amazon.com", "Spagna": "amazon.es", "Francia": "amazon.fr", "Germania": "amazon.de"}
-    domain = domains.get(mkt, "amazon.it")
+def get_amazon_data(domain, keyword):
     ANT_KEY = "5a93911a587c4aff8d8dc7f2af9ea0db"
     SCRAPERAPI_KEY = st.secrets.get("SCRAPERAPI_KEY", "")
     WEBSCRAPINGAI_KEY = st.secrets.get("WEBSCRAPINGAI_KEY", "")
@@ -183,11 +143,11 @@ def get_amazon_data(mkt, keyword):
             
             text = item.get_text(separator=' ').lower()
             
-            # Estrazione BSR
-            bsr_match = re.search(r'(?:n\.|#|rank)\s*([0-9.,]+)', text)
+            # BSR Parsing (aggiornato per supportare formati internazionali come "Nr.")
+            bsr_match = re.search(r'(?:n\.|nr\.|n\.º|#|rank)\s*([0-9.,]+)', text)
             bsr = float(bsr_match.group(1).replace('.', '').replace(',', '')) if bsr_match else np.nan
             
-            # Estrazione Recensioni (Nuova Feature Funzionale)
+            # Recensioni Parsing
             rev_el = item.select_one('.a-icon-alt')
             reviews = 0
             if rev_el:
@@ -196,8 +156,9 @@ def get_amazon_data(mkt, keyword):
                     try: reviews = int(re.sub(r'[^\d]', '', rev_text_container.text))
                     except: pass
             
-            is_self = "Sì (Self-Pub)" if any(x in text for x in ['independently', 'kdp', 'indipendente', 'createspace']) else "Tradizionale"
+            is_self = "Independent" if any(x in text for x in ['independently', 'kdp', 'indipendente', 'createspace']) else "Publishing House"
             
+            # Prezzo Parsing
             price = 0.0
             price_el = item.select_one('.a-price .a-offscreen')
             if price_el:
@@ -210,141 +171,129 @@ def get_amazon_data(mkt, keyword):
     return pd.DataFrame(results)
 
 # ==============================================================================
-# 4. SIDEBAR: RICERCA SEMANTICA E ANALISI MERCATO
+# 4. MAIN SIDEBAR (MARKETPLACE & RICERCA DATI)
 # ==============================================================================
+marketplaces = {
+    "us Amazon.com (US)": "amazon.com",
+    "gb Amazon.co.uk (UK)": "amazon.co.uk",
+    "de Amazon.de (Germany)": "amazon.de",
+    "fr Amazon.fr (France)": "amazon.fr",
+    "it Amazon.it (Italy)": "amazon.it",
+    "es Amazon.es (Spain)": "amazon.es",
+    "ca Amazon.ca (Canada)": "amazon.ca"
+}
+
 with st.sidebar:
-    st.markdown("### 🔍 Targeting Mercato")
+    st.markdown("<p style='font-weight:700; color:#9ca3af; font-size:0.8rem; margin-bottom:5px; margin-top:0;'>MARKETPLACE & CATEGORY</p>", unsafe_allow_html=True)
+    mkt_choice = st.selectbox("Marketplace *", list(marketplaces.keys()))
+    domain = marketplaces[mkt_choice]
     
-    amazon_categories = ["Libri (Tutti)", "Arte, cinema e fotografia", "Biografie, diari e memorie", "Casa, hobby e cucina", "Diritto", "Economia, affari e finanza", "Educazione e insegnamento", "Famiglia, salute e benessere", "Fantascienza e Fantasy", "Gialli e Thriller", "Informatica", "Letteratura e narrativa", "Libri per bambini", "Politica", "Religione e spiritualità", "Romanzi rosa", "Scienze, tecnologia e medicina", "Scienze sociali", "Sport e tempo libero", "Storia", "Viaggi", "Test di preparazione"]
-    categoria_selezionata = st.selectbox("Categoria Amazon", amazon_categories)
-    genere = st.selectbox("Formato Editoriale", ["Saggio", "Manuale Operativo", "Test Prep", "Workbook", "Romanzo", "Ricettario", "Biografia"])
-    nicchia = st.text_input("Nicchia specifica (es. Dieta Keto)")
-    target = st.text_input("Target Lettore (es. Donne Over 50)")
+    amazon_categories = ["All Departments", "Books", "Kindle Store", "Audible Books & Originals"]
+    cat_choice = st.selectbox("Category", amazon_categories)
+    
+    pub_choice = st.selectbox("Publisher Type *", ["All Publishers", "Publishing House", "Independent"])
     
     st.markdown("---")
+    st.markdown("<p style='font-weight:700; color:#9ca3af; font-size:0.8rem; margin-bottom:5px; margin-top:0;'>SEARCH PARAMETERS</p>", unsafe_allow_html=True)
+    search_input = st.text_input("Enter Keyword *")
     
-    if st.button("🪄 Genera Long-Tail Keywords", use_container_width=True):
-        if not nicchia or not target: st.error("Inserisci nicchia e target!")
+    if st.button("🔍 Search Keyword", type="primary", use_container_width=True):
+        if not search_input: st.error("Inserisci una keyword.")
         else:
-            with st.spinner("Analisi query di ricerca in corso..."):
-                client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                prompt_kw = (
-                    f"Agisci come tool SEO Amazon. Categoria '{categoria_selezionata}', Nicchia: {nicchia}, Formato: {genere}, Target: {target}. "
-                    "Genera 5 keyword long-tail (3-5 parole) con alta intenzione d'acquisto, separate solo da virgola. "
-                    "NON inserire commenti."
-                )
-                res = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt_kw}])
-                st.session_state.suggested_kws = res.choices[0].message.content
-
-    if st.session_state.suggested_kws:
-        st.success("Analisi Semantica Completata.")
-        st.info(st.session_state.suggested_kws)
-        kw_selezionata = st.text_input("Seleziona Keyword Target:", value=st.session_state.suggested_kws.split(',')[0].strip())
-        
-        if st.button("🚀 Esegui Scansione Competitor", type="primary", use_container_width=True):
-            with st.spinner("Raccolta dati da Amazon in corso..."):
-                df = get_amazon_data("Italia", kw_selezionata)
+            with st.spinner("Estraggo dati dal mercato selezionato..."):
+                df = get_amazon_data(domain, search_input)
                 if not df.empty:
-                    st.session_state.data, st.session_state.kw = df, kw_selezionata
+                    st.session_state.raw_data = df
+                    st.session_state.search_kw = search_input
+                    st.session_state.suggestions = None # Reset vecchie analisi
+                else:
+                    st.error("Nessun dato trovato o blocco di rete. Riprova.")
                     
-                    # LOGICA DI PROFITTABILITÀ AVANZATA (Stile SaaS)
-                    avg_p = df['Prezzo'].mean()
-                    indie_r = (len(df[df['Editore'] == "Sì (Self-Pub)"]) / len(df)) * 100
-                    avg_rev = df['Recensioni'].mean()
-                    
-                    # Calcolo Score base
-                    base_score = 40 + (30 if avg_p > 12.5 else 0) + (30 if indie_r > 40 else 0)
-                    
-                    # Penali Competizione (Se la media recensioni è troppo alta, la nicchia è satura)
-                    if avg_rev > 1500: st.session_state.difficulty = "Estrema"
-                    elif avg_rev > 500: st.session_state.difficulty = "Alta"; base_score -= 15
-                    elif avg_rev > 100: st.session_state.difficulty = "Media"
-                    else: st.session_state.difficulty = "Bassa"; base_score += 10
-                    
-                    # Calcolo Domanda stimata tramite BSR validi
-                    valid_bsr = pd.to_numeric(df['BSR'], errors='coerce').dropna()
-                    if not valid_bsr.empty:
-                        med_bsr = valid_bsr.median()
-                        if med_bsr < 10000: st.session_state.demand = "Altissima"
-                        elif med_bsr < 50000: st.session_state.demand = "Alta"
-                        elif med_bsr < 150000: st.session_state.demand = "Media"
-                        else: st.session_state.demand = "Bassa"
-                    else: st.session_state.demand = "Sconosciuta"
-
-                    st.session_state.score = min(max(base_score, 0), 100) # Clamp tra 0 e 100
-                    st.session_state.reviews = avg_rev
-                    
-                    # GENERAZIONE PACCHETTO EDITORIALE COMPLETO
-                    if st.session_state.score >= 50: # Abbassato il threshold per dare più idee
-                        client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                        prompt_book = f"""
-                        L'analisi di mercato per '{kw_selezionata}' è positiva. Genera 3 idee di libri per il target '{target}'.
-                        Formato TASSATIVO e IDENTICO per ogni libro (Non cambiare le parole chiave del formato):
-                        TITOLO: [Titolo magnetico principale]
-                        SOTTOTITOLO: [Sottotitolo SEO ottimizzato]
-                        TRAMA: [Sinossi persuasiva di 3-4 righe]
-                        ---
-                        """
-                        st.session_state.suggestions = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt_book}]).choices[0].message.content
-                    else: st.session_state.suggestions = "NEGATIVE"
-                else: st.error("⚠️ Impossibile analizzare. Amazon ha respinto le richieste o pagina vuota.")
-                
-    st.markdown("---")
-    if st.button("🔄 Reset Dashboard", use_container_width=True):
-        for key in ['data', 'suggestions', 'kw', 'score', 'suggested_kws', 'demand', 'difficulty', 'reviews']:
-            st.session_state[key] = None if key != 'score' else 0
+    if st.button("🔄 Clear Data", use_container_width=True):
+        for key in ['raw_data', 'filtered_data', 'suggestions', 'search_kw']: st.session_state[key] = None
         st.rerun()
 
 # ==============================================================================
-# 5. DASHBOARD: RENDERING RISULTATI E COMPETITION METRICS
+# 5. CORE LAYOUT: RISULTATI (LEFT) E PANNELLO AI (RIGHT)
 # ==============================================================================
-if st.session_state.data is not None:
-    st.markdown(f"<div class='white-title'>Analisi Competitiva: <span style='color: #2563eb;'>{st.session_state.kw.upper()}</span></div>", unsafe_allow_html=True)
+if st.session_state.raw_data is not None:
     
-    # ROW 1: Metriche Economiche
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Prezzo Medio", f"{st.session_state.data['Prezzo'].mean():.2f} €")
-    c2.metric("Market Share Indie", f"{int((len(st.session_state.data[st.session_state.data['Editore'] == 'Sì (Self-Pub)']) / len(st.session_state.data)) * 100)}%")
-    c3.metric("Recensioni Medie (Top 100)", f"{int(st.session_state.reviews)}")
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    # ROW 2: Metriche Strategiche
-    sc1, sc2, sc3 = st.columns(3)
-    
-    diff_color = "green" if st.session_state.difficulty in ["Bassa", "Media"] else "red" if st.session_state.difficulty == "Estrema" else "yellow"
-    dem_color = "green" if st.session_state.demand in ["Altissima", "Alta"] else "yellow" if st.session_state.demand == "Media" else "red"
-    score_color = "green" if st.session_state.score >= 70 else "yellow" if st.session_state.score >= 50 else "red"
+    # Applica filtro Editore
+    df = st.session_state.raw_data
+    if pub_choice != "All Publishers":
+        df = df[df['Editore'] == pub_choice]
+    st.session_state.filtered_data = df
 
-    sc1.markdown(f"<div class='stMetric'><p style='color: #6b7280; font-size: 0.85rem; font-weight: 600; text-transform: uppercase;'>Difficoltà Keyword</p><div class='badge badge-{diff_color}'>{st.session_state.difficulty}</div></div>", unsafe_allow_html=True)
-    sc2.markdown(f"<div class='stMetric'><p style='color: #6b7280; font-size: 0.85rem; font-weight: 600; text-transform: uppercase;'>Domanda Stimata</p><div class='badge badge-{dem_color}'>{st.session_state.demand}</div></div>", unsafe_allow_html=True)
-    sc3.markdown(f"<div class='stMetric'><p style='color: #6b7280; font-size: 0.85rem; font-weight: 600; text-transform: uppercase;'>Opportunity Score</p><div class='badge badge-{score_color}'>{int(st.session_state.score)}/100</div></div>", unsafe_allow_html=True)
+    # Dividiamo lo schermo: 70% Dati Mercato, 30% Pannello AI Analisi
+    col_data, col_ai = st.columns([7, 3], gap="large")
 
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    with st.expander("📊 Tabella Dati Competitor (Esporta)", expanded=False):
-        st.dataframe(st.session_state.data, use_container_width=True, hide_index=True)
-
-    st.markdown("---")
-
-    if st.session_state.suggestions == "NEGATIVE":
-        st.error(f"❌ ANALISI NEGATIVA: L'Opportunity Score per '{st.session_state.kw}' è troppo basso ({int(st.session_state.score)}/100). Competizione troppo alta o mercato povero.")
-    elif st.session_state.suggestions:
-        st.markdown(f"<div class='white-title'>Pacchetto Editoriale Suggerito</div>", unsafe_allow_html=True)
+    # --- COLONNA SINISTRA: DATI MERCATO ---
+    with col_data:
+        st.markdown(f"<div class='section-title'>Risultati per: <span style='color: #2563eb;'>'{st.session_state.search_kw}'</span></div>", unsafe_allow_html=True)
         
-        clean_suggestions = st.session_state.suggestions.replace("**", "")
-        # Regex estesa per catturare Titolo, Sottotitolo e Trama
-        matches = re.findall(r'TITOLO:\s*(.*?)\s*SOTTOTITOLO:\s*(.*?)\s*TRAMA:\s*(.*?)(?=\nTITOLO:|\n---|---|$)', clean_suggestions, re.IGNORECASE | re.DOTALL)
-        
-        if matches:
-            for t_clean, s_clean, p_clean in matches:
-                st.markdown(f"""
-                <div class="ebook-card">
-                    <div class="ebook-title">{t_clean.strip()}</div>
-                    <div class="ebook-subtitle">{s_clean.strip()}</div>
-                    <div class="ebook-plot">{p_clean.strip()}</div>
-                </div>
-                """, unsafe_allow_html=True)
+        # Metriche
+        if not df.empty:
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Libri Trovati", len(df))
+            c2.metric("Prezzo Medio", f"{df['Prezzo'].mean():.2f}")
+            c3.metric("Recensioni Medie", f"{int(df['Recensioni'].mean())}")
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            # Mostra chiaramente Titolo, Prezzo, BSR, Recensioni ed Editore
+            st.dataframe(df[['Titolo', 'BSR', 'Prezzo', 'Recensioni', 'Editore']], use_container_width=True, height=500, hide_index=True)
         else:
-            st.warning("⚠️ Formato AI non riconosciuto. Ecco il testo grezzo:")
-            st.write(st.session_state.suggestions)
+            st.warning(f"Nessun libro trovato per il filtro '{pub_choice}'. Prova a selezionare 'All Publishers'.")
+
+    # --- COLONNA DESTRA: PANNELLO AI (L'Ulteriore Sidebar) ---
+    with col_ai:
+        st.markdown("<div class='ai-panel'>", unsafe_allow_html=True)
+        st.markdown("<div class='section-title' style='margin-top:0;'>✨ AI Strategy Lab</div>", unsafe_allow_html=True)
+        st.markdown("<p style='font-size:0.9rem; color:#4b5563;'>Genera una strategia editoriale specifica per i dati appena estratti.</p>", unsafe_allow_html=True)
+        
+        target_ai = st.text_input("Target Lettore (Opzionale)", placeholder="es. Principianti, Donne, ecc.")
+        format_ai = st.selectbox("Formato Libro", ["Manuale Pratico", "Saggio", "Guida Passo-Passo", "Workbook", "Romanzo"])
+        
+        if st.button("🪄 Analizza e Genera Ideazione", type="primary", use_container_width=True):
+            if df.empty:
+                st.error("Nessun dato su cui lavorare.")
+            else:
+                with st.spinner("Elaborazione AI..."):
+                    # Calcolo Score Interno per validazione
+                    avg_p = df['Prezzo'].mean()
+                    base_score = 40 + (30 if avg_p > 10 else 0)
+                    if base_score >= 40: # Abbassata la soglia per permettere sempre l'uso del lab
+                        client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+                        prompt_book = f"""
+                        Agisci come un Publisher. Keyword target: '{st.session_state.search_kw}'. Mercato: {mkt_choice}. Target: {target_ai}. Formato: {format_ai}.
+                        Genera 3 idee di libri ottimizzati. Formato TASSATIVO:
+                        TITOLO: [Testo]
+                        TRAMA: [Testo]
+                        ---
+                        """
+                        st.session_state.suggestions = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt_book}]).choices[0].message.content
+                    else:
+                        st.session_state.suggestions = "NEGATIVE"
+        
+        # Stampa Risultati AI all'interno del pannello
+        if st.session_state.suggestions == "NEGATIVE":
+            st.error("Mercato troppo povero per generare idee profittevoli.")
+        elif st.session_state.suggestions:
+            st.markdown("<hr style='margin: 1.5rem 0;'>", unsafe_allow_html=True)
+            clean_suggestions = st.session_state.suggestions.replace("**", "")
+            matches = re.findall(r'TITOLO:\s*(.*?)\s*TRAMA:\s*(.*?)(?=\nTITOLO:|\n---|---|$)', clean_suggestions, re.IGNORECASE | re.DOTALL)
+            
+            if matches:
+                for t_clean, p_clean in matches:
+                    st.markdown(f"""
+                    <div style='background-color:#f3f4f6; padding:1rem; border-radius:6px; margin-bottom:1rem; border-left:3px solid #10b981;'>
+                        <div style='font-weight:700; color:#111827; font-size:1rem; margin-bottom:0.5rem;'>{t_clean.strip()}</div>
+                        <div style='color:#4b5563; font-size:0.85rem; line-height:1.4;'>{p_clean.strip()}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.write(st.session_state.suggestions)
+                
+        st.markdown("</div>", unsafe_allow_html=True)
+else:
+    # Schermata di benvenuto quando non ci sono dati
+    st.info("👈 Usa il pannello laterale per selezionare il Marketplace ed effettuare la ricerca.")
