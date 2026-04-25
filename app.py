@@ -9,9 +9,9 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 
 # ==============================================================================
-# 1. DESIGN SYSTEM: PREMIUM SAAS DASHBOARD (DUAL-PANEL)
+# 1. DESIGN SYSTEM: PREMIUM SAAS DASHBOARD (DUAL-PANEL SEQUENZIALE)
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 12.3", page_icon="📈", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 12.4", page_icon="📈", layout="wide")
 
 st.markdown("""
     <style>
@@ -35,7 +35,6 @@ st.markdown("""
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
         }
         
-        /* INPUT STYLES */
         .stTextInput input, .stSelectbox div[data-baseweb="select"] {
             background-color: #374151 !important;
             border: 1px solid #4b5563 !important;
@@ -43,7 +42,6 @@ st.markdown("""
             border-radius: 6px !important;
         }
 
-        /* TITLES */
         .program-title { 
             color: #111827 !important; 
             font-size: 2rem !important; 
@@ -65,13 +63,13 @@ st.markdown("""
         [data-testid="stMetricLabel"] p { color: #6b7280 !important; font-weight: 600 !important; text-transform: uppercase; font-size: 0.8rem; }
         .stMetric { background-color: white !important; border: 1px solid #e5e7eb; padding: 1rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
 
-        /* DATAFRAME */
+        /* DATAFRAME E TABELLE */
         [data-testid="stDataFrame"] {
             background-color: white; padding: 1rem; border-radius: 8px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: 1px solid #e5e7eb;
         }
 
-        /* AI RIGHT PANEL (Simulated 2nd Sidebar) */
+        /* AI RIGHT PANEL */
         .ai-panel {
             background-color: white;
             padding: 1.5rem;
@@ -81,18 +79,14 @@ st.markdown("""
             height: 100%;
         }
 
-        /* EBOOK CARDS */
-        .ebook-card {
-            background-color: white; border: 1px solid #e5e7eb; border-left: 4px solid #3b82f6; 
-            padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-        .ebook-title { color: #111827 !important; font-weight: 800; font-size: 1.1rem; margin-bottom: 0.5rem; }
-        .ebook-plot { color: #4b5563 !important; font-size: 0.95rem; }
-
-        /* BUTTONS */
-        .stButton button { border-radius: 6px !important; font-weight: 600 !important; }
+        .stButton button { border-radius: 6px !important; font-weight: 600 !important; width: 100%;}
         button[kind="primary"] { background-color: #2563eb !important; color: white !important; border: none !important; }
         button[kind="primary"]:hover { background-color: #1d4ed8 !important; }
+        
+        .empty-state {
+            text-align: center; padding: 3rem; color: #6b7280; font-size: 1.1rem;
+            border: 2px dashed #d1d5db; border-radius: 12px; margin-top: 2rem;
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -101,11 +95,33 @@ st.markdown("<div class='program-title'>KDP Market Intelligence Hub</div>", unsa
 # ==============================================================================
 # 2. GESTIONE STATO
 # ==============================================================================
-for key in ['raw_data', 'filtered_data', 'suggestions', 'search_kw', 'score']:
-    if key not in st.session_state: st.session_state[key] = None if key != 'score' else 0
+for key in ['raw_data', 'filtered_data', 'suggestions', 'search_kw', 'selected_market']:
+    if key not in st.session_state: st.session_state[key] = None
 
 # ==============================================================================
-# 3. MOTORE DI SCRAPING
+# 3. DIZIONARI CATEGORIE MULTILINGUA
+# ==============================================================================
+marketplaces = {
+    "🇺🇸 Amazon.com (US)": "amazon.com",
+    "🇬🇧 Amazon.co.uk (UK)": "amazon.co.uk",
+    "🇮🇹 Amazon.it (Italia)": "amazon.it",
+    "🇩🇪 Amazon.de (Germany)": "amazon.de",
+    "🇫🇷 Amazon.fr (France)": "amazon.fr",
+    "🇪🇸 Amazon.es (Spain)": "amazon.es"
+}
+
+# Mappe Categorie dinamiche in base al mercato
+categories_map = {
+    "amazon.it": ["Tutte le categorie", "Libri", "Kindle Store", "Arte, cinema e fotografia", "Biografie, diari e memorie", "Casa, hobby e cucina", "Diritto", "Economia, affari e finanza", "Fantascienza e Fantasy", "Fumetti e manga", "Gialli e Thriller", "Informatica, Web e Digital Media", "Romanzi rosa", "Salute, famiglia e stile di vita", "Sport e tempo libero", "Storia"],
+    "amazon.com": ["All Departments", "Books", "Kindle Store", "Arts & Photography", "Biographies & Memoirs", "Business & Money", "Cookbooks, Food & Wine", "Crafts, Hobbies & Home", "Health, Fitness & Dieting", "History", "Mystery, Thriller & Suspense", "Romance", "Science Fiction & Fantasy", "Self-Help", "Sports & Outdoors"],
+    "amazon.co.uk": ["All Departments", "Books", "Kindle Store", "Arts & Photography", "Biographies & Memoirs", "Business, Finance & Law", "Comics & Graphic Novels", "Computing & Internet", "Crime, Thrillers & Mystery", "Health, Family & Lifestyle", "History", "Romance", "Science Fiction & Fantasy", "Sports, Hobbies & Games"],
+    "amazon.de": ["Alle Kategorien", "Bücher", "Kindle-Shop", "Biografien & Erinnerungen", "Business & Karriere", "Comics & Mangas", "Computer & Internet", "Fachbücher", "Fantasy & Science Fiction", "Kochen & Genießen", "Krimi & Thriller", "Ratgeber", "Reise & Abenteuer", "Sport & Fitness"],
+    "amazon.fr": ["Toutes nos boutiques", "Livres", "Boutique Kindle", "Art, Musique et Cinéma", "Bande dessinée", "Biographies et témoignages", "Cuisine et Vins", "Entreprise et Bourse", "Histoire", "Informatique et Internet", "Policiers et Suspense", "Romance et littérature sentimentale", "Santé, Forme et Diététique", "Science-Fiction et Fantasy"],
+    "amazon.es": ["Todos los departamentos", "Libros", "Tienda Kindle", "Arte, cine y fotografía", "Biografías, diarios y hechos reales", "Cómics y manga", "Deportes y aire libre", "Economía y empresa", "Historia", "Hogar, manualidades y estilos de vida", "Informática, internet y medios digitales", "Policíaca, negra y suspense", "Romántica", "Salud, familia y desarrollo personal"]
+}
+
+# ==============================================================================
+# 4. MOTORE DI SCRAPING
 # ==============================================================================
 def get_amazon_data(domain, keyword):
     ANT_KEY = "5a93911a587c4aff8d8dc7f2af9ea0db"
@@ -129,7 +145,7 @@ def get_amazon_data(domain, keyword):
         return None
 
     with ThreadPoolExecutor(max_workers=5) as executor:
-        pages = list(executor.map(fetch_with_triple_fallback, range(1, 11)))
+        pages = list(executor.map(fetch_with_triple_fallback, range(1, 8))) # Scansione equilibrata
     
     results, seen = [], set()
     for html in pages:
@@ -143,11 +159,9 @@ def get_amazon_data(domain, keyword):
             
             text = item.get_text(separator=' ').lower()
             
-            # BSR Parsing (aggiornato per supportare formati internazionali come "Nr.")
             bsr_match = re.search(r'(?:n\.|nr\.|n\.º|#|rank)\s*([0-9.,]+)', text)
             bsr = float(bsr_match.group(1).replace('.', '').replace(',', '')) if bsr_match else np.nan
             
-            # Recensioni Parsing
             rev_el = item.select_one('.a-icon-alt')
             reviews = 0
             if rev_el:
@@ -156,9 +170,9 @@ def get_amazon_data(domain, keyword):
                     try: reviews = int(re.sub(r'[^\d]', '', rev_text_container.text))
                     except: pass
             
-            is_self = "Independent" if any(x in text for x in ['independently', 'kdp', 'indipendente', 'createspace']) else "Publishing House"
+            # Controllo Editore multilingua
+            is_self = "Independent" if any(x in text for x in ['independently', 'kdp', 'indipendente', 'createspace', 'unabhängig']) else "Publishing House"
             
-            # Prezzo Parsing
             price = 0.0
             price_el = item.select_one('.a-price .a-offscreen')
             if price_el:
@@ -171,129 +185,121 @@ def get_amazon_data(domain, keyword):
     return pd.DataFrame(results)
 
 # ==============================================================================
-# 4. MAIN SIDEBAR (MARKETPLACE & RICERCA DATI)
+# 5. MAIN SIDEBAR (FASE 1: RICERCA DATI)
 # ==============================================================================
-marketplaces = {
-    "us Amazon.com (US)": "amazon.com",
-    "gb Amazon.co.uk (UK)": "amazon.co.uk",
-    "de Amazon.de (Germany)": "amazon.de",
-    "fr Amazon.fr (France)": "amazon.fr",
-    "it Amazon.it (Italy)": "amazon.it",
-    "es Amazon.es (Spain)": "amazon.es",
-    "ca Amazon.ca (Canada)": "amazon.ca"
-}
-
 with st.sidebar:
-    st.markdown("<p style='font-weight:700; color:#9ca3af; font-size:0.8rem; margin-bottom:5px; margin-top:0;'>MARKETPLACE & CATEGORY</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-weight:700; color:#9ca3af; font-size:0.8rem; margin-bottom:5px; margin-top:0;'>STEP 1: MARKET DATA</p>", unsafe_allow_html=True)
+    
     mkt_choice = st.selectbox("Marketplace *", list(marketplaces.keys()))
     domain = marketplaces[mkt_choice]
+    st.session_state.selected_market = domain
     
-    amazon_categories = ["All Departments", "Books", "Kindle Store", "Audible Books & Originals"]
-    cat_choice = st.selectbox("Category", amazon_categories)
+    # Categorie Dinamiche
+    cat_list = categories_map.get(domain, ["All Departments"])
+    cat_choice = st.selectbox("Category", cat_list)
     
     pub_choice = st.selectbox("Publisher Type *", ["All Publishers", "Publishing House", "Independent"])
     
     st.markdown("---")
-    st.markdown("<p style='font-weight:700; color:#9ca3af; font-size:0.8rem; margin-bottom:5px; margin-top:0;'>SEARCH PARAMETERS</p>", unsafe_allow_html=True)
-    search_input = st.text_input("Enter Keyword *")
+    search_input = st.text_input("Enter Keyword *", placeholder="e.g., keto diet for beginners")
     
-    if st.button("🔍 Search Keyword", type="primary", use_container_width=True):
-        if not search_input: st.error("Inserisci una keyword.")
+    if st.button("🔍 Estrai Dati Mercato", type="primary"):
+        if not search_input: st.error("Inserisci una keyword da analizzare.")
         else:
-            with st.spinner("Estraggo dati dal mercato selezionato..."):
+            with st.spinner(f"Scraping in corso su {domain}..."):
                 df = get_amazon_data(domain, search_input)
                 if not df.empty:
                     st.session_state.raw_data = df
                     st.session_state.search_kw = search_input
-                    st.session_state.suggestions = None # Reset vecchie analisi
+                    st.session_state.suggestions = None # Reset AI lab
                 else:
-                    st.error("Nessun dato trovato o blocco di rete. Riprova.")
+                    st.error("Nessun dato trovato o blocco di rete temporaneo.")
                     
-    if st.button("🔄 Clear Data", use_container_width=True):
+    if st.button("🔄 Reset Dati"):
         for key in ['raw_data', 'filtered_data', 'suggestions', 'search_kw']: st.session_state[key] = None
         st.rerun()
 
 # ==============================================================================
-# 5. CORE LAYOUT: RISULTATI (LEFT) E PANNELLO AI (RIGHT)
+# 6. CORE LAYOUT: RISULTATI E PANNELLO AI (FASE 2)
 # ==============================================================================
-if st.session_state.raw_data is not None:
-    
-    # Applica filtro Editore
+if st.session_state.raw_data is None:
+    st.markdown("<div class='empty-state'>🚀 Usa il pannello laterale per selezionare il Marketplace, la categoria e avviare l'estrazione dati.</div>", unsafe_allow_html=True)
+
+else:
     df = st.session_state.raw_data
-    if pub_choice != "All Publishers":
-        df = df[df['Editore'] == pub_choice]
-    st.session_state.filtered_data = df
+    if pub_choice != "All Publishers": df = df[df['Editore'] == pub_choice]
 
-    # Dividiamo lo schermo: 70% Dati Mercato, 30% Pannello AI Analisi
-    col_data, col_ai = st.columns([7, 3], gap="large")
+    col_data, col_ai = st.columns([6, 4], gap="large")
 
-    # --- COLONNA SINISTRA: DATI MERCATO ---
+    # --- COLONNA SINISTRA: RISULTATI E TABELLA ---
     with col_data:
-        st.markdown(f"<div class='section-title'>Risultati per: <span style='color: #2563eb;'>'{st.session_state.search_kw}'</span></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='section-title'>Dati Estratti: <span style='color: #2563eb;'>'{st.session_state.search_kw}'</span></div>", unsafe_allow_html=True)
         
-        # Metriche
         if not df.empty:
             c1, c2, c3 = st.columns(3)
-            c1.metric("Libri Trovati", len(df))
+            c1.metric("Libri Rilevati", len(df))
             c2.metric("Prezzo Medio", f"{df['Prezzo'].mean():.2f}")
             c3.metric("Recensioni Medie", f"{int(df['Recensioni'].mean())}")
             
             st.markdown("<br>", unsafe_allow_html=True)
-            # Mostra chiaramente Titolo, Prezzo, BSR, Recensioni ed Editore
-            st.dataframe(df[['Titolo', 'BSR', 'Prezzo', 'Recensioni', 'Editore']], use_container_width=True, height=500, hide_index=True)
+            # Mostra chiaramente la tabella dati
+            st.dataframe(df[['Titolo', 'BSR', 'Prezzo', 'Recensioni', 'Editore']], use_container_width=True, height=600, hide_index=True)
         else:
-            st.warning(f"Nessun libro trovato per il filtro '{pub_choice}'. Prova a selezionare 'All Publishers'.")
+            st.warning(f"Nessun libro trovato per il filtro autore selezionato.")
 
-    # --- COLONNA DESTRA: PANNELLO AI (L'Ulteriore Sidebar) ---
+    # --- COLONNA DESTRA: AI STRATEGY LAB (ATTIVO SOLO DOPO I DATI) ---
     with col_ai:
         st.markdown("<div class='ai-panel'>", unsafe_allow_html=True)
+        st.markdown("<p style='font-weight:700; color:#9ca3af; font-size:0.8rem; margin-bottom:5px; margin-top:0;'>STEP 2: IDEAZIONE</p>", unsafe_allow_html=True)
         st.markdown("<div class='section-title' style='margin-top:0;'>✨ AI Strategy Lab</div>", unsafe_allow_html=True)
-        st.markdown("<p style='font-size:0.9rem; color:#4b5563;'>Genera una strategia editoriale specifica per i dati appena estratti.</p>", unsafe_allow_html=True)
+        st.markdown("<p style='font-size:0.9rem; color:#4b5563;'>Valuta i dati a sinistra. Se la nicchia ti sembra interessante, inserisci il target e genera la strategia editoriale.</p>", unsafe_allow_html=True)
         
-        target_ai = st.text_input("Target Lettore (Opzionale)", placeholder="es. Principianti, Donne, ecc.")
-        format_ai = st.selectbox("Formato Libro", ["Manuale Pratico", "Saggio", "Guida Passo-Passo", "Workbook", "Romanzo"])
+        st.markdown("<br>", unsafe_allow_html=True)
+        target_ai = st.text_input("Definisci Target Lettore *", placeholder="es. Donne Over 50, Programmatori Junior")
+        format_ai = st.selectbox("Formato Libro *", ["Manuale Pratico", "Saggio", "Guida Passo-Passo", "Workbook", "Romanzo", "Ricettario", "Biografia"])
         
-        if st.button("🪄 Analizza e Genera Ideazione", type="primary", use_container_width=True):
+        if st.button("🪄 Genera Pacchetto Editoriale", type="primary"):
             if df.empty:
-                st.error("Nessun dato su cui lavorare.")
+                st.error("Estrai prima dei dati validi a sinistra.")
+            elif not target_ai:
+                st.error("Inserisci il Target Lettore per generare idee specifiche.")
             else:
-                with st.spinner("Elaborazione AI..."):
-                    # Calcolo Score Interno per validazione
-                    avg_p = df['Prezzo'].mean()
-                    base_score = 40 + (30 if avg_p > 10 else 0)
-                    if base_score >= 40: # Abbassata la soglia per permettere sempre l'uso del lab
-                        client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                        prompt_book = f"""
-                        Agisci come un Publisher. Keyword target: '{st.session_state.search_kw}'. Mercato: {mkt_choice}. Target: {target_ai}. Formato: {format_ai}.
-                        Genera 3 idee di libri ottimizzati. Formato TASSATIVO:
-                        TITOLO: [Testo]
-                        TRAMA: [Testo]
-                        ---
-                        """
-                        st.session_state.suggestions = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt_book}]).choices[0].message.content
-                    else:
-                        st.session_state.suggestions = "NEGATIVE"
+                with st.spinner("L'AI sta analizzando la competizione e generando le idee..."):
+                    client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+                    prompt_book = f"""
+                    Agisci come un Publisher di successo su Amazon {domain}. 
+                    Keyword di partenza: '{st.session_state.search_kw}'. 
+                    Categoria: {cat_choice}. 
+                    Target Lettore: {target_ai}. 
+                    Formato Libro: {format_ai}.
+                    
+                    Basandoti su queste informazioni, genera 3 idee di libri ottimizzati. 
+                    Devono risolvere i problemi del target e differenziarsi.
+                    Formato TASSATIVO:
+                    TITOLO: [Titolo magnetico principale]
+                    SOTTOTITOLO: [Sottotitolo SEO ottimizzato]
+                    TRAMA: [Sinossi persuasiva di 3-4 righe]
+                    ---
+                    """
+                    st.session_state.suggestions = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt_book}]).choices[0].message.content
         
-        # Stampa Risultati AI all'interno del pannello
-        if st.session_state.suggestions == "NEGATIVE":
-            st.error("Mercato troppo povero per generare idee profittevoli.")
-        elif st.session_state.suggestions:
+        # Stampa Risultati AI
+        if st.session_state.suggestions:
             st.markdown("<hr style='margin: 1.5rem 0;'>", unsafe_allow_html=True)
             clean_suggestions = st.session_state.suggestions.replace("**", "")
-            matches = re.findall(r'TITOLO:\s*(.*?)\s*TRAMA:\s*(.*?)(?=\nTITOLO:|\n---|---|$)', clean_suggestions, re.IGNORECASE | re.DOTALL)
+            matches = re.findall(r'TITOLO:\s*(.*?)\s*SOTTOTITOLO:\s*(.*?)\s*TRAMA:\s*(.*?)(?=\nTITOLO:|\n---|---|$)', clean_suggestions, re.IGNORECASE | re.DOTALL)
             
             if matches:
-                for t_clean, p_clean in matches:
+                for t_clean, s_clean, p_clean in matches:
                     st.markdown(f"""
-                    <div style='background-color:#f3f4f6; padding:1rem; border-radius:6px; margin-bottom:1rem; border-left:3px solid #10b981;'>
-                        <div style='font-weight:700; color:#111827; font-size:1rem; margin-bottom:0.5rem;'>{t_clean.strip()}</div>
-                        <div style='color:#4b5563; font-size:0.85rem; line-height:1.4;'>{p_clean.strip()}</div>
+                    <div style='background-color:#f3f4f6; padding:1.2rem; border-radius:8px; margin-bottom:1rem; border-left:4px solid #10b981;'>
+                        <div style='font-weight:800; color:#111827; font-size:1.1rem; margin-bottom:0.2rem;'>{t_clean.strip()}</div>
+                        <div style='font-weight:600; color:#4b5563; font-size:0.9rem; margin-bottom:0.8rem; font-style:italic;'>{s_clean.strip()}</div>
+                        <div style='color:#374151; font-size:0.9rem; line-height:1.5;'>{p_clean.strip()}</div>
                     </div>
                     """, unsafe_allow_html=True)
             else:
+                st.warning("⚠️ Formato AI non riconosciuto:")
                 st.write(st.session_state.suggestions)
                 
         st.markdown("</div>", unsafe_allow_html=True)
-else:
-    # Schermata di benvenuto quando non ci sono dati
-    st.info("👈 Usa il pannello laterale per selezionare il Marketplace ed effettuare la ricerca.")
