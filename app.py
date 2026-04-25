@@ -11,7 +11,7 @@ import numpy as np
 # ==============================================================================
 # 1. DESIGN SYSTEM
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 12.8", page_icon="📈", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 12.9", page_icon="📈", layout="wide")
 
 st.markdown("""
     <style>
@@ -23,7 +23,6 @@ st.markdown("""
 
         .stApp { background-color: #f9fafb !important; }
 
-        /* SIDEBAR (LEFT) */
         section[data-testid="stSidebar"] { 
             background-color: #1f2937 !important; 
             min-width: 320px !important;
@@ -58,18 +57,15 @@ st.markdown("""
             margin-top: 1rem;
         }
 
-        /* METRICS */
         [data-testid="stMetricValue"] { color: #2563eb !important; font-weight: 800 !important; font-size: 1.8rem !important; }
         [data-testid="stMetricLabel"] p { color: #6b7280 !important; font-weight: 600 !important; text-transform: uppercase; font-size: 0.8rem; }
         .stMetric { background-color: white !important; border: 1px solid #e5e7eb; padding: 1rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
 
-        /* DATAFRAME */
         [data-testid="stDataFrame"] {
             background-color: white; padding: 1rem; border-radius: 8px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: 1px solid #e5e7eb;
         }
 
-        /* AI RIGHT PANEL */
         .ai-panel {
             background-color: white; padding: 1.5rem; border-radius: 8px;
             border: 1px solid #e5e7eb; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); height: 100%;
@@ -89,7 +85,7 @@ st.markdown("""
 st.markdown("<div class='program-title'>KDP Market Intelligence Hub</div>", unsafe_allow_html=True)
 
 # ==============================================================================
-# 2. GESTIONE STATO E DIZIONARI
+# 2. GESTIONE STATO
 # ==============================================================================
 for key in ['raw_data', 'suggestions', 'search_category', 'selected_market', 'pub_filter']:
     if key not in st.session_state: st.session_state[key] = None
@@ -118,15 +114,22 @@ fallback_keywords = {
 }
 
 # ==============================================================================
-# 3. MOTORE DI SCRAPING (DEEP SCAN & REGEX FIX)
+# 3. MOTORE DI SCRAPING (INDIE HUNTER MODE)
 # ==============================================================================
-def get_amazon_data(domain, keyword):
+def get_amazon_data(domain, keyword, publisher_filter):
     ANT_KEY = "5a93911a587c4aff8d8dc7f2af9ea0db"
     SCRAPERAPI_KEY = st.secrets.get("SCRAPERAPI_KEY", "")
     WEBSCRAPINGAI_KEY = st.secrets.get("WEBSCRAPINGAI_KEY", "")
     
     def fetch_with_triple_fallback(p):
-        amazon_url = f"https://www.{domain}/s?k={keyword.replace(' ', '+')}&i=stripbooks&page={p}"
+        # IL SEGRETO: Se cerchiamo Independent, forziamo il nodo Amazon KDP via URL
+        base_url = f"https://www.{domain}/s?k={keyword.replace(' ', '+')}&i=stripbooks&page={p}"
+        if publisher_filter == "Independent":
+            # Parametro segreto Amazon per filtrare solo i libri "Independently published"
+            amazon_url = base_url + "&rh=p_30%3AIndependently+published"
+        else:
+            amazon_url = base_url
+
         try:
             r = requests.get(f"https://api.scrapingant.com/v2/general?url={urllib.parse.quote(amazon_url)}&x-api-key={ANT_KEY}&browser=true&proxy_type=residential", timeout=35)
             if r.status_code == 200: return r.text
@@ -141,9 +144,9 @@ def get_amazon_data(domain, keyword):
         except: pass
         return None
 
-    # Deep Scan: Scansioniamo 15 pagine in parallelo per assicurarci di trovare indipendenti
+    # Estendiamo la ricerca a 20 pagine per garantire una buona pescata
     with ThreadPoolExecutor(max_workers=5) as executor:
-        pages = list(executor.map(fetch_with_triple_fallback, range(1, 16)))
+        pages = list(executor.map(fetch_with_triple_fallback, range(1, 21)))
     
     results, seen = [], set()
     for html in pages:
@@ -158,22 +161,28 @@ def get_amazon_data(domain, keyword):
             
             text_full = item.get_text(separator=' ').lower()
             
-            # 1. BSR FIX: Estrazione iper-aggressiva e multi-lingua
+            # Determinazione Editore (se abbiamo usato l'hack URL, assumiamo sia Independent se non palese il contrario)
+            is_self = "Publishing House"
+            if publisher_filter == "Independent" or any(x in text_full for x in ['independently', 'kdp', 'indipendente', 'createspace', 'unabhängig']):
+                is_self = "Independent"
+
+            # Scarto immediato per risparmiare memoria
+            if publisher_filter != "All Publishers" and is_self != publisher_filter:
+                continue
+            
+            # Regex avanzata BSR
             bsr = np.nan
-            # Cerca pattern come "#1,200", "n. 500", "Posizione 1200", "Rank 45,000"
             bsr_match = re.search(r'(?:posizi\w*|rank|n\.|nr\.|#|n\.º)\s*:?\s*in\s+.*?(?:\n|\r|\Z)|(?:posizi\w*|rank|n\.|nr\.|#|n\.º)\s*:?\s*([0-9.,]+)', text_full)
             if bsr_match:
-                # Se il primo gruppo è vuoto, proviamo a estrarre il primo numero grosso che troviamo vicino
                 val = bsr_match.group(1)
                 if not val:
                     val_match = re.search(r'([0-9]{1,3}(?:[.,][0-9]{3})+|[0-9]+)', text_full)
                     if val_match: val = val_match.group(1)
-                
                 if val:
                     try: bsr = float(val.replace('.', '').replace(',', ''))
                     except: pass
 
-            # 2. RECENSIONI FIX
+            # Recensioni
             reviews = 0
             rev_el = item.select_one('.a-icon-alt')
             if rev_el:
@@ -182,10 +191,7 @@ def get_amazon_data(domain, keyword):
                     try: reviews = int(re.sub(r'[^\d]', '', rev_text_container.text))
                     except: pass
             
-            # 3. EDITORE FIX
-            is_self = "Independent" if any(x in text_full for x in ['independently', 'kdp', 'indipendente', 'createspace', 'unabhängig']) else "Publishing House"
-            
-            # 4. PREZZO FIX
+            # Prezzo
             price = 0.0
             price_el = item.select_one('.a-price .a-offscreen')
             if price_el:
@@ -201,8 +207,8 @@ def get_amazon_data(domain, keyword):
                 "Editore": is_self
             })
             
-            # Aumentato il limite del calderone raw a 200 per avere margine per il filtro
-            if len(results) >= 200: break
+            # Cap massimo aumentato
+            if len(results) >= 150: break
             
     return pd.DataFrame(results)
 
@@ -224,18 +230,21 @@ with st.sidebar:
     st.markdown("---")
     
     if st.button("🔍 Estrai Dati Categoria", type="primary"):
-        with st.spinner(f"Deep Scan in corso su {domain}... (Potrebbe richiedere qualche secondo in più)"):
+        with st.spinner(f"Scraping avanzato su {domain}... (Potrebbe richiedere fino a 30 sec)"):
             search_query = fallback_keywords.get(domain, "books") if cat_choice in ["Tutte le categorie", "All Departments", "Alle Kategorien", "Toutes nos boutiques", "Todos los departamentos"] else cat_choice
             
-            df = get_amazon_data(domain, search_query)
+            df = get_amazon_data(domain, search_query, pub_choice)
             
             if not df.empty:
                 st.session_state.raw_data = df
                 st.session_state.search_category = cat_choice
-                st.session_state.pub_filter = pub_choice # Salviamo il filtro scelto
+                st.session_state.pub_filter = pub_choice 
                 st.session_state.suggestions = None 
             else:
-                st.error("Nessun dato trovato. Amazon potrebbe aver bloccato le API. Riprova tra poco.")
+                if pub_choice == "Independent":
+                    st.error("Nessun libro Independent trovato. Amazon potrebbe aver nascosto la categoria o i nodi URL sono cambiati.")
+                else:
+                    st.error("Nessun dato trovato. Riprova.")
                     
     if st.button("🔄 Reset Dati"):
         for key in ['raw_data', 'suggestions', 'search_category', 'pub_filter']: st.session_state[key] = None
@@ -247,10 +256,7 @@ with st.sidebar:
 if st.session_state.raw_data is None:
     st.markdown("<div class='empty-state'>🚀 Usa il pannello laterale per selezionare il Marketplace, la categoria e avviare l'estrazione dati.</div>", unsafe_allow_html=True)
 else:
-    # FILTRO POST-ESTRAZIONE: Applichiamo il filtro sui dati raw
     df_to_show = st.session_state.raw_data
-    if st.session_state.pub_filter != "All Publishers":
-        df_to_show = df_to_show[df_to_show['Editore'] == st.session_state.pub_filter]
 
     col_data, col_ai = st.columns([6, 4], gap="large")
 
@@ -266,15 +272,14 @@ else:
             c3.metric("Recensioni Medie", f"{int(df_to_show['Recensioni'].mean())}")
             
             st.markdown("<br>", unsafe_allow_html=True)
-            # Ordinamento base per avere i best seller in alto se il BSR è presente
+            
             df_to_show_sorted = df_to_show.copy()
-            # Convertiamo BSR in numerico temporaneamente per il sort, poi rimettiamo la stringa originale se N/D
             df_to_show_sorted['BSR_Num'] = pd.to_numeric(df_to_show_sorted['BSR'], errors='coerce')
             df_to_show_sorted = df_to_show_sorted.sort_values(by='BSR_Num').drop(columns=['BSR_Num'])
             
             st.dataframe(df_to_show_sorted[['Titolo', 'BSR', 'Prezzo', 'Recensioni', 'Editore']], use_container_width=True, height=600, hide_index=True)
         else:
-            st.warning(f"La Deep Scan ha analizzato 200+ libri, ma nessuno corrispondeva al filtro '{st.session_state.pub_filter}' in questa categoria. Prova 'All Publishers'.")
+            st.warning("Errore nel rendering della tabella.")
 
     # --- COLONNA DESTRA: AI LAB ---
     with col_ai:
