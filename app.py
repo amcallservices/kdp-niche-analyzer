@@ -8,46 +8,135 @@ import openai
 from concurrent.futures import ThreadPoolExecutor
 
 # ==============================================================================
-# 1. DESIGN SYSTEM: CONTRASTO BIANCO/NERO & RIMOZIONE MENU
+# 1. DESIGN SYSTEM: MODERN SAAS DASHBOARD
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 11.9.1", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 12.0", page_icon="📊", layout="wide")
 
 st.markdown("""
     <style>
+        /* Base Streamlit Overrides */
         #MainMenu {visibility: hidden;}
         header {visibility: hidden;}
         footer {visibility: hidden;}
         .stAppHeader {display:none;}
         [data-testid="collapsedControl"] { display: none !important; }
 
-        section[data-testid="stSidebar"] { 
-            background-color: #0d1117 !important; min-width: 450px !important;
-            border-right: 1px solid #30363d;
+        /* App Background */
+        .stApp {
+            background-color: #f3f4f6; /* Very light gray */
         }
-        section[data-testid="stSidebar"] * { color: white !important; }
-        
-        .white-title { color: white !important; font-size: 2.2rem !important; font-weight: 800; margin-bottom: 20px; text-align: center; }
-        .program-title { color: #ffd700 !important; font-size: 2.8rem !important; font-weight: 900; text-align: center; margin-bottom: 30px; text-transform: uppercase; border-bottom: 2px solid #ffd700; padding-bottom: 10px; }
 
-        .stMarkdown p, .stMarkdown li, .stMarkdown span, [data-testid="stMetricLabel"] p { 
-            color: #000000 !important; font-weight: 500;
+        /* Sidebar: Deep Professional Indigo */
+        section[data-testid="stSidebar"] { 
+            background-color: #1e1e2f !important; 
+            min-width: 400px !important;
+            border-right: 1px solid #2d2d44;
+            padding-top: 2rem;
+        }
+        section[data-testid="stSidebar"] * { 
+            color: #f8f9fa !important; 
+        }
+        /* Sidebar inputs styling */
+        .stTextInput input, .stSelectbox div[data-baseweb="select"] {
+            background-color: #2d2d44 !important;
+            border: 1px solid #4b4b63 !important;
+            color: white !important;
+            border-radius: 6px;
         }
         
-        .explanation-box {
-            background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 20px; border-radius: 10px; color: black !important;
+        /* Main Area Typography */
+        .program-title { 
+            color: #111827 !important; 
+            font-size: 2.2rem !important; 
+            font-weight: 800; 
+            text-align: left; 
+            margin-bottom: 2rem; 
+            padding-bottom: 1rem;
+            border-bottom: 2px solid #e5e7eb;
+            letter-spacing: -0.025em;
         }
+        .white-title { 
+            color: #374151 !important; 
+            font-size: 1.5rem !important; 
+            font-weight: 700; 
+            margin-bottom: 1rem; 
+        }
+
+        /* Metrics Styling */
+        [data-testid="stMetricValue"] { 
+            color: #2563eb !important; /* Tech Blue */
+            font-weight: 700 !important; 
+            font-size: 2rem !important;
+        }
+        [data-testid="stMetricLabel"] p {
+            color: #6b7280 !important;
+            font-weight: 600 !important;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+        }
+        .stMetric { 
+            background-color: white !important; 
+            border: 1px solid #e5e7eb; 
+            padding: 20px; 
+            border-radius: 12px; 
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        /* Dataframe Styling */
+        [data-testid="stDataFrame"] {
+            background-color: white;
+            padding: 1rem;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            border: 1px solid #e5e7eb;
+        }
+
+        /* Strategy Cards */
         .ebook-card {
-            background-color: white; border: 2px solid #ffd700; padding: 25px; border-radius: 10px; margin-bottom: 20px; box-shadow: 2px 2px 12px rgba(0,0,0,0.1);
+            background-color: white; 
+            border: 1px solid #e5e7eb; 
+            border-left: 4px solid #2563eb; /* Blue accent line */
+            padding: 24px; 
+            border-radius: 12px; 
+            margin-bottom: 1.5rem; 
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            transition: transform 0.2s ease-in-out;
         }
-        .ebook-title { color: #856404 !important; font-weight: 900; font-size: 1.5rem; margin-bottom: 10px; }
-        .ebook-plot { color: #000000 !important; line-height: 1.6; font-size: 1.1rem; }
-        
-        [data-testid="stMetricValue"] { color: #238636 !important; font-weight: 800 !important; }
-        .stMetric { background-color: white !important; border: 1px solid #dee2e6; padding: 15px; border-radius: 10px; }
+        .ebook-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .ebook-title { 
+            color: #111827 !important; 
+            font-weight: 800; 
+            font-size: 1.25rem; 
+            margin-bottom: 12px; 
+        }
+        .ebook-plot { 
+            color: #4b5563 !important; 
+            line-height: 1.7; 
+            font-size: 1rem; 
+        }
+
+        /* Buttons */
+        .stButton button {
+            border-radius: 6px !important;
+            font-weight: 600 !important;
+            padding: 0.5rem 1rem !important;
+        }
+        /* Primary Button Override */
+        button[kind="primary"] {
+            background-color: #2563eb !important;
+            color: white !important;
+            border: none !important;
+        }
+        button[kind="primary"]:hover {
+            background-color: #1d4ed8 !important;
+        }
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='program-title'>Analisi delle Nicchie Profittevoli</div>", unsafe_allow_html=True)
+st.markdown("<div class='program-title'>KDP Market Intelligence</div>", unsafe_allow_html=True)
 
 # ==============================================================================
 # 2. GESTIONE MEMORIA (PERSISTENZA)
@@ -59,7 +148,7 @@ if 'score' not in st.session_state: st.session_state.score = 0
 if 'suggested_kws' not in st.session_state: st.session_state.suggested_kws = ""
 
 # ==============================================================================
-# 3. MOTORE DI SCRAPING TRIPLE-FALLBACK (ANTI-BLOCCO)
+# 3. MOTORE DI SCRAPING TRIPLE-FALLBACK (ANTI-BLOCCO) - INTATTO
 # ==============================================================================
 def get_amazon_data(mkt, keyword):
     domains = {"Italia": "amazon.it", "USA": "amazon.com", "Spagna": "amazon.es", "Francia": "amazon.fr", "Germania": "amazon.de"}
@@ -114,13 +203,11 @@ def get_amazon_data(mkt, keyword):
     return pd.DataFrame(results)
 
 # ==============================================================================
-# 4. SIDEBAR CON CATEGORIE AMAZON E GENERAZIONE SILENZIOSA
+# 4. SIDEBAR CON CATEGORIE E GENERAZIONE
 # ==============================================================================
 with st.sidebar:
-    st.title("🛡️ STRATEGY LAB 11.9.1")
+    st.markdown("### 🔍 Parametri di Ricerca")
     
-    # --- NUOVA SEZIONE: CATEGORIE LIBRI AMAZON ---
-    st.markdown("### 📚 Categoria Amazon")
     amazon_categories = [
         "Libri (Tutti)", "Arte, cinema e fotografia", "Biografie, diari e memorie", 
         "Calendari e agende", "Casa, hobby e cucina", "Diritto", "Dizionari e opere di consultazione", 
@@ -130,22 +217,17 @@ with st.sidebar:
         "Politica", "Religione e spiritualità", "Romanzi rosa", "Scienze, tecnologia e medicina", 
         "Scienze sociali", "Sport e tempo libero", "Storia", "Viaggi", "Test di preparazione"
     ]
-    categoria_selezionata = st.selectbox("Scegli la categoria di riferimento:", amazon_categories)
-    st.markdown("---")
-
-    if st.button("🔄 RESET"):
-        st.session_state.data, st.session_state.suggestions, st.session_state.suggested_kws = None, None, ""
-        st.rerun()
+    categoria_selezionata = st.selectbox("Categoria Amazon", amazon_categories)
+    genere = st.selectbox("Formato / Sotto-Genere", ["Saggio Scientifico", "Quiz Scientifico", "Manuale Tecnico", "Test Prep", "Religioso", "Spirituale", "Meditazione", "Business", "Romanzo Rosa", "Thriller", "Fantasy", "Fantascienza", "Psicologia", "Biografia", "Ricettario"])
+    nicchia = st.text_input("Nicchia specifica (es. Dieta Keto)")
+    target = st.text_input("Target Lettore (es. Donne Over 50)")
     
     st.markdown("---")
-    genere = st.selectbox("Genere / Formato", ["Saggio Scientifico", "Quiz Scientifico", "Manuale Tecnico", "Test Prep", "Religioso", "Spirituale", "Meditazione", "Business", "Romanzo Rosa", "Thriller", "Fantasy", "Fantascienza", "Psicologia", "Biografia", "Ricettario"])
-    nicchia = st.text_input("Nicchia specifica")
-    target = st.text_input("Target Lettore")
     
-    if st.button("🔍 GENERA KEYWORD CHIRURGICHE"):
+    if st.button("Genera Keyword Semantic", use_container_width=True):
         if not nicchia or not target: st.error("Inserisci nicchia e target!")
         else:
-            with st.spinner("Estrazione keyword..."):
+            with st.spinner("Estrazione..."):
                 client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
                 prompt_kw = (
                     f"Agisci come esperto SEO Amazon specializzato nella categoria '{categoria_selezionata}'. "
@@ -158,11 +240,12 @@ with st.sidebar:
                 st.session_state.suggested_kws = res.choices[0].message.content
 
     if st.session_state.suggested_kws:
-        st.info(f"Suggerite: {st.session_state.suggested_kws}")
-        kw_selezionata = st.text_input("Keyword finale:", value=st.session_state.suggested_kws.split(',')[0].strip())
+        st.success("Keyword generate con successo.")
+        st.info(st.session_state.suggested_kws)
+        kw_selezionata = st.text_input("Keyword da analizzare:", value=st.session_state.suggested_kws.split(',')[0].strip())
         
-        if st.button("🚀 LANCIA ANALISI TRIPLE-ENGINE", type="primary"):
-            with st.spinner("Analisi e drafting..."):
+        if st.button("Esegui Analisi Mercato", type="primary", use_container_width=True):
+            with st.spinner("Scraping dati in corso..."):
                 df = get_amazon_data("Italia", kw_selezionata)
                 if not df.empty:
                     st.session_state.data, st.session_state.kw = df, kw_selezionata
@@ -175,22 +258,52 @@ with st.sidebar:
                         st.session_state.suggestions = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt_book}]).choices[0].message.content
                     else: st.session_state.suggestions = "NEGATIVE"
                 else: st.error("⚠️ Nessun dato trovato. Riprova.")
+                
+    st.markdown("---")
+    if st.button("Reset Sessione", use_container_width=True):
+        st.session_state.data, st.session_state.suggestions, st.session_state.suggested_kws = None, None, ""
+        st.rerun()
 
 # ==============================================================================
 # 5. DASHBOARD: RENDERING E STAMPA RISULTATI
 # ==============================================================================
 if st.session_state.data is not None:
-    st.markdown(f"<div class='white-title'>Report Chirurgico: {st.session_state.kw.upper()}</div>", unsafe_allow_html=True)
-    st.dataframe(st.session_state.data, use_container_width=True, hide_index=True)
+    st.markdown(f"<div class='white-title'>Analisi Dati: {st.session_state.kw}</div>", unsafe_allow_html=True)
     
+    # Layout a colonne per le metriche in stile Dashboard
     c1, c2, c3 = st.columns(3)
     c1.metric("Prezzo Medio", f"{st.session_state.data['Prezzo'].mean():.2f} €")
     indie_p = (len(st.session_state.data[st.session_state.data['Editore'] == "Sì (Self-Pub)"]) / len(st.session_state.data)) * 100
-    c2.metric("Indie Ratio", f"{int(indie_p)}%")
-    c3.metric("Score Nicchia", f"{st.session_state.score}/100")
+    c2.metric("Market Share Indie", f"{int(indie_p)}%")
+    c3.metric("Score di Profittabilità", f"{st.session_state.score}/100")
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Dati in un expander per mantenere l'interfaccia pulita
+    with st.expander("Visualizza Dati Grezzi (Top 100)", expanded=False):
+        st.dataframe(st.session_state.data, use_container_width=True, hide_index=True)
+
+    st.markdown("---")
 
     if st.session_state.suggestions == "NEGATIVE":
-        st.error(f"❌ ANALISI NEGATIVA: La keyword '{st.session_state.kw}' non è profittevole secondo i criteri strategici.")
+        st.error(f"❌ ANALISI NEGATIVA: La keyword '{st.session_state.kw}' non soddisfa i criteri minimi di profittabilità del framework.")
+    elif st.session_state.suggestions:
+        st.markdown(f"<div class='white-title'>Output Strategico</div>", unsafe_allow_html=True)
+        
+        clean_suggestions = st.session_state.suggestions.replace("**", "")
+        matches = re.findall(r'TITOLO:\s*(.*?)\s*TRAMA:\s*(.*?)(?=\nTITOLO:|\n---|---|$)', clean_suggestions, re.IGNORECASE | re.DOTALL)
+        
+        if matches:
+            for t_clean, p_clean in matches:
+                st.markdown(f"""
+                <div class="ebook-card">
+                    <div class="ebook-title">{t_clean.strip()}</div>
+                    <div class="ebook-plot">{p_clean.strip()}</div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.warning("Formato risposta AI non standard:")
+            st.write(st.session_state.suggestions)ord '{st.session_state.kw}' non è profittevole secondo i criteri strategici.")
     elif st.session_state.suggestions:
         st.success(f"✅ ANALISI POSITIVA! Ecco i titoli e le trame per '{st.session_state.kw}':")
         
