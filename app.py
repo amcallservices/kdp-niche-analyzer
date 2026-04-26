@@ -7,7 +7,7 @@ import numpy as np
 # ==============================================================================
 # 1. DESIGN SYSTEM
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 13.6", page_icon="📈", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 13.7", page_icon="📈", layout="wide")
 
 st.markdown("""
     <style>
@@ -29,14 +29,14 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='program-title'>KDP Market Intelligence Hub v13.6</div>", unsafe_allow_html=True)
+st.markdown("<div class='program-title'>KDP Market Intelligence Hub v13.7</div>", unsafe_allow_html=True)
 
 # --- STATO ---
 for key in ['raw_data', 'suggestions', 'selected_market', 'pub_filter', 'raw_cols']:
     if key not in st.session_state: st.session_state[key] = None
 
 # ==============================================================================
-# 2. SIDEBAR (HYBRID MAPPING)
+# 2. SIDEBAR (IMPORT E MAPPING)
 # ==============================================================================
 with st.sidebar:
     st.markdown("<p style='font-weight:700; color:#9ca3af; font-size:0.8rem;'>STEP 1: IMPORTA DATI</p>", unsafe_allow_html=True)
@@ -50,7 +50,6 @@ with st.sidebar:
     if st.button("📊 Elabora Dati", type="primary"):
         if uploaded_file:
             try:
-                # Caricamento con auto-rilevamento separatore ed encoding
                 try:
                     df_raw = pd.read_csv(uploaded_file, sep=None, engine='python', encoding='utf-8')
                 except:
@@ -69,37 +68,39 @@ with st.sidebar:
                 mapped_df = pd.DataFrame()
                 
                 # 1. Copertina
-                img_col = find_col(['image', 'img', 'thumbnail', 'photo', 'url', 'src', 'copertina'])
+                img_col = find_col(['image', 'img', 'thumbnail', 'photo', 'url', 'src', 'copertina', 'a-dynamic-image'])
                 mapped_df['Copertina'] = df_raw[img_col] if img_col else None
                 
-                # 2. ID e TITOLO (Mappatura Ibrida)
-                mapped_df['ID'] = range(1, len(df_raw) + 1)
+                # 2A. ID Numerico (Progressivo)
+                mapped_df['N. Libro'] = range(1, len(df_raw) + 1)
+                
+                # 2B. Titolo Testuale
                 t_col = find_col(['title', 'titolo', 'name', 'nome', 'product', 'text', 'a-size-medium', 'a-link-normal'])
-                mapped_df['Titolo'] = df_raw[t_col] if t_col else "N/D"
+                mapped_df['Titolo Libro'] = df_raw[t_col] if t_col else "N/D"
                 
                 # 3. BSR
-                b_col = find_col(['bsr', 'rank', 'classifica', 'sales', 'posizione', 'ranking'])
+                b_col = find_col(['bsr', 'rank', 'classifica', 'sales', 'posizione', 'ranking', 'best sellers'])
                 if b_col:
                     mapped_df['BSR'] = pd.to_numeric(df_raw[b_col].astype(str).str.replace(r'[^\d]', '', regex=True), errors='coerce')
                 else:
                     mapped_df['BSR'] = np.nan
                 
                 # 4. Prezzo
-                p_col = find_col(['price', 'prezzo', 'list price', 'buy price', 'costo', 'a-offscreen'])
+                p_col = find_col(['price', 'prezzo', 'list price', 'buy price', 'costo', 'a-offscreen', 'a-price'])
                 if p_col:
                     mapped_df['Prezzo'] = pd.to_numeric(df_raw[p_col].astype(str).str.replace(r'[^\d.,]', '', regex=True).str.replace(',', '.'), errors='coerce')
                 else:
                     mapped_df['Prezzo'] = np.nan
                 
                 # 5. Recensioni
-                r_col = find_col(['review count', 'ratings', 'recensioni', 'voti', 'reviews', 's-underline-text', 'a-size-base'])
+                r_col = find_col(['review count', 'ratings', 'recensioni', 'voti', 'reviews', 's-underline-text', 'a-size-base', 'rating-count'])
                 if r_col:
                     mapped_df['Recensioni'] = pd.to_numeric(df_raw[r_col].astype(str).str.replace(r'[^\d]', '', regex=True), errors='coerce')
                 else:
                     mapped_df['Recensioni'] = np.nan
 
                 # 6. Editore
-                e_col = find_col(['brand', 'manufacturer', 'author', 'editore', 'publisher', 'marca', 'vendor', 'byline'])
+                e_col = find_col(['brand', 'manufacturer', 'author', 'editore', 'publisher', 'marca', 'vendor', 'byline', 'a-color-secondary'])
                 if e_col:
                     mapped_df['Editore'] = df_raw[e_col].apply(lambda x: "Independent" if any(s in str(x).lower() for s in ['independently', 'kdp', 'indipendente', 'createspace', 'self']) else "Publishing House")
                 else:
@@ -149,9 +150,9 @@ if st.session_state.raw_data is not None:
             height=700, 
             hide_index=True,
             column_config={
-                "Copertina": st.column_config.ImageColumn("Copertina", width="small"),
-                "ID": st.column_config.NumberColumn("ID", width="small"),
-                "Titolo": st.column_config.TextColumn("Titolo Libro", width="large"),
+                "Copertina": st.column_config.ImageColumn("Copertina"),
+                "N. Libro": st.column_config.NumberColumn("ID", width="small"),
+                "Titolo Libro": st.column_config.TextColumn("Titolo Libro", width="large"),
                 "Prezzo": st.column_config.NumberColumn("Prezzo", format="%.2f €"),
                 "BSR": st.column_config.NumberColumn("BSR", format="%d"),
                 "Recensioni": st.column_config.NumberColumn("Recensioni", format="%d")
