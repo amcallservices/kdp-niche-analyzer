@@ -87,7 +87,7 @@ st.markdown("<div class='program-title'>KDP Market Intelligence Hub</div>", unsa
 # ==============================================================================
 # 2. GESTIONE STATO
 # ==============================================================================
-for key in ['raw_data', 'suggestions', 'search_category', 'selected_market', 'pub_filter']:
+for key in ['raw_data', 'suggestions', 'search_category', 'search_subcategory', 'selected_market', 'pub_filter']:
     if key not in st.session_state: st.session_state[key] = None
 
 marketplaces = {
@@ -106,6 +106,29 @@ categories_map = {
     "amazon.de": ["Alle Kategorien", "Bücher", "Kindle-Shop", "Biografien", "Business", "Comics", "Computer", "Fachbücher", "Fantasy", "Kochen", "Krimi", "Ratgeber", "Reise", "Sport"],
     "amazon.fr": ["Toutes nos boutiques", "Livres", "Boutique Kindle", "Art", "Bande dessinée", "Biographies", "Cuisine", "Entreprise", "Histoire", "Informatique", "Policiers", "Romance", "Santé", "Science-Fiction"],
     "amazon.es": ["Todos los departamentos", "Libros", "Tienda Kindle", "Arte", "Biografías", "Cómics", "Deportes", "Economía", "Historia", "Hogar", "Informática", "Policíaca", "Romántica", "Salud"]
+}
+
+# --- NUOVO DIZIONARIO SOTTO-CATEGORIE ---
+subcategories_map = {
+    "amazon.it": {
+        "Arte, cinema e fotografia": ["Architettura", "Design e arti decorative", "Fotografia", "Musica", "Storia dell'arte"],
+        "Biografie, diari e memorie": ["Storiche", "Artisti e musicisti", "Leader e politici", "Sportivi"],
+        "Casa, hobby e cucina": ["Cucina e vini", "Fai da te", "Giardinaggio", "Artigianato", "Animali domestici"],
+        "Economia, affari e finanza": ["Management", "Marketing", "Finanza personale", "Impresa e strategia"],
+        "Fantascienza e Fantasy": ["Fantasy epico", "Fantascienza militare", "Cyberpunk", "Urban Fantasy"],
+        "Gialli e Thriller": ["Thriller psicologici", "Poliziesco", "Spionaggio", "Mistero"],
+        "Informatica": ["Programmazione", "Web Design", "Intelligenza Artificiale", "Sistemi operativi", "Sicurezza informatica"],
+        "Romanzi rosa": ["Contemporaneo", "Storico", "Commedia romantica", "New Adult"],
+        "Salute e famiglia": ["Dieta e fitness", "Salute mentale", "Maternità e puericultura", "Sviluppo personale", "Psicologia"],
+        "Sport": ["Calcio", "Ciclismo", "Arti marziali", "Fitness", "Sport estremi"],
+        "Storia": ["Storia antica", "Seconda guerra mondiale", "Storia contemporanea", "Storia d'Italia"]
+    },
+    "amazon.com": {
+        "Business & Money": ["Management & Leadership", "Personal Finance", "Marketing & Sales", "Investing", "Economics"],
+        "Health & Fitness": ["Diets & Weight Loss", "Mental Health", "Exercise & Fitness", "Alternative Medicine", "Psychology & Counseling"],
+        "Romance": ["Contemporary", "Historical", "Romantic Comedy", "Paranormal", "Suspense"],
+        "Self-Help": ["Motivational", "Happiness", "Personal Transformation", "Stress Management", "Success"]
+    }
 }
 
 fallback_keywords = {
@@ -165,16 +188,13 @@ def get_amazon_data(domain, keyword, publisher_filter):
             if publisher_filter != "All Publishers" and is_self != publisher_filter:
                 continue
             
-            # --- INIZIO FIX CHIRURGICO BSR ---
             bsr = np.nan
-            # Regex infallibile per estrarre qualsiasi numero associato a classifiche/BSR multilingua (es. n. 1, #1, nr. 1, posizione 1, bestseller n. 1)
             bsr_match = re.search(r'(?:bestseller\s*)?(?:n\.|nr\.|n\.º|n°|#|rank|posizione|pos\.)\s*:?\s*([0-9]{1,3}(?:[.,][0-9]{3})*|[0-9]+)', text_full)
             if bsr_match:
                 val = bsr_match.group(1)
                 if val:
                     try: bsr = float(val.replace('.', '').replace(',', ''))
                     except: pass
-            # --- FINE FIX CHIRURGICO BSR ---
 
             reviews = 0
             rev_el = item.select_one('.a-icon-alt')
@@ -216,19 +236,33 @@ with st.sidebar:
     cat_list = categories_map.get(domain, ["All Departments"])
     cat_choice = st.selectbox("Categoria", cat_list)
     
+    # --- NUOVO: SELETTORE SOTTO-CATEGORIA DINAMICO ---
+    domain_subcats = subcategories_map.get(domain, {})
+    subcat_list = domain_subcats.get(cat_choice, ["Generale"]) # Fallback se la categoria non ha sotto-categorie mappate
+    subcat_choice = st.selectbox("Sotto-Categoria", subcat_list)
+    # -------------------------------------------------
+
     pub_choice = st.selectbox("Publisher Type *", ["All Publishers", "Publishing House", "Independent"])
     
     st.markdown("---")
     
-    if st.button("🔍 Estrai Dati Categoria", type="primary"):
+    if st.button("🔍 Estrai Dati Sotto-Categoria", type="primary"):
         with st.spinner(f"Scraping avanzato su {domain}... (Potrebbe richiedere fino a 30 sec)"):
-            search_query = fallback_keywords.get(domain, "books") if cat_choice in ["Tutte le categorie", "All Departments", "Alle Kategorien", "Toutes nos boutiques", "Todos los departamentos"] else cat_choice
             
+            # --- NUOVA LOGICA DI RICERCA ---
+            # Usa la sotto-categoria per la ricerca, a meno che non sia "Generale"
+            if subcat_choice != "Generale":
+                search_query = subcat_choice
+            else:
+                search_query = fallback_keywords.get(domain, "books") if cat_choice in ["Tutte le categorie", "All Departments", "Alle Kategorien", "Toutes nos boutiques", "Todos los departamentos"] else cat_choice
+            # -------------------------------
+
             df = get_amazon_data(domain, search_query, pub_choice)
             
             if not df.empty:
                 st.session_state.raw_data = df
                 st.session_state.search_category = cat_choice
+                st.session_state.search_subcategory = subcat_choice # Salviamo la sotto-categoria
                 st.session_state.pub_filter = pub_choice 
                 st.session_state.suggestions = None 
             else:
@@ -238,7 +272,7 @@ with st.sidebar:
                     st.error("Nessun dato trovato. Riprova.")
                     
     if st.button("🔄 Reset Dati"):
-        for key in ['raw_data', 'suggestions', 'search_category', 'pub_filter']: st.session_state[key] = None
+        for key in ['raw_data', 'suggestions', 'search_category', 'search_subcategory', 'pub_filter']: st.session_state[key] = None
         st.rerun()
 
 # ==============================================================================
@@ -254,7 +288,10 @@ else:
     # --- COLONNA SINISTRA: TABELLA ---
     with col_data:
         filter_text = f" ({st.session_state.pub_filter})" if st.session_state.pub_filter != "All Publishers" else ""
-        st.markdown(f"<div class='section-title'>Dati Estratti: <span style='color: #2563eb;'>{st.session_state.search_category}</span>{filter_text}</div>", unsafe_allow_html=True)
+        
+        # Mostra sia la Categoria che la Sotto-categoria nel titolo
+        subcat_display = f" > {st.session_state.search_subcategory}" if st.session_state.search_subcategory != "Generale" else ""
+        st.markdown(f"<div class='section-title'>Dati Estratti: <span style='color: #2563eb;'>{st.session_state.search_category}{subcat_display}</span>{filter_text}</div>", unsafe_allow_html=True)
         
         if not df_to_show.empty:
             c1, c2, c3 = st.columns(3)
@@ -293,9 +330,12 @@ else:
             else:
                 with st.spinner("L'AI sta generando le idee..."):
                     client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+                    
+                    # L'AI ORA RAGIONA ANCHE SULLA SOTTO-CATEGORIA PER MAGGIORE PRECISIONE
                     prompt_book = f"""
                     Agisci come un Publisher di successo su Amazon {st.session_state.selected_market}. 
-                    Categoria esplorata: '{st.session_state.search_category}'. Nicchia individuata: '{nicchia_ai}'. Target: {target_ai}. Formato: {format_ai}.
+                    Categoria: '{st.session_state.search_category}'. Sotto-Categoria esplorata: '{st.session_state.search_subcategory}'. 
+                    Nicchia individuata: '{nicchia_ai}'. Target: {target_ai}. Formato: {format_ai}.
                     Genera 3 idee di libri ottimizzati.
                     Formato TASSATIVO (NON inserire testo extra prima o dopo):
                     TITOLO: [Titolo magnetico]
