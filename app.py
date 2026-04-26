@@ -7,7 +7,7 @@ import numpy as np
 # ==============================================================================
 # 1. DESIGN SYSTEM
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 16.7", page_icon="💰", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 16.8", page_icon="💰", layout="wide")
 
 st.markdown("""
     <style>
@@ -23,9 +23,10 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='program-title'>KDP Intelligence Hub v16.7 💰</div>", unsafe_allow_html=True)
+st.markdown("<div class='program-title'>KDP Intelligence Hub v16.8 💰</div>", unsafe_allow_html=True)
 
 if 'raw_data' not in st.session_state: st.session_state.raw_data = None
+if 'suggestions' not in st.session_state: st.session_state.suggestions = None
 
 # ==============================================================================
 # 2. LOGICA DI ESTRAZIONE (BACKEND ANTI-CRASH)
@@ -48,14 +49,12 @@ with st.sidebar:
                 cols = df_raw.columns.tolist()
                 temp = pd.DataFrame(index=df_raw.index)
                 
-                # INIZIALIZZAZIONE FORZATA DELLE COLONNE (Previene il KeyError)
                 target_cols = ["Copertina", "Titolo", "BSR", "Prezzo", "Autore", "Recensioni"]
                 for c in target_cols:
                     temp[c] = np.nan
 
                 bsrs, authors = [], []
                 for _, row in df_raw.iterrows():
-                    # Radar BSR Reale (Sempre il numero più alto trovato nella riga)
                     ranks = []
                     for v in row.dropna():
                         v_s = str(v)
@@ -67,7 +66,6 @@ with st.sidebar:
                                 except: continue
                     bsrs.append(max(ranks) if ranks else np.nan)
                     
-                    # Logic Autore
                     auth = "N/D"
                     for i, c in enumerate(cols):
                         cell_val = str(row[c])
@@ -82,7 +80,6 @@ with st.sidebar:
                 temp['BSR'] = bsrs
                 temp['Autore'] = authors
                 
-                # Mapping Avanzato Colonne
                 img_c = next((c for c in cols if any(k in c.lower() for k in ['s-image src', 'image', 'copertina', 'src', 'dynamic-image'])), None)
                 if img_c: temp['Copertina'] = df_raw[img_c]
 
@@ -103,10 +100,12 @@ with st.sidebar:
             
             st.session_state.raw_data = pd.concat(all_dfs, ignore_index=True)
             st.session_state.raw_data.insert(1, 'ID', range(1, len(st.session_state.raw_data) + 1))
+            st.session_state.suggestions = None
             st.rerun()
 
     if st.button("🔄 RESET"):
         st.session_state.raw_data = None
+        st.session_state.suggestions = None
         st.rerun()
 
 # ==============================================================================
@@ -118,7 +117,6 @@ if st.session_state.raw_data is not None:
     avg_price = df['Prezzo'].mean()
     
     st.markdown("### 📈 Valutazione Ragionata della Nicchia")
-    
     c1, c2, c3 = st.columns(3)
     
     with c1:
@@ -130,7 +128,7 @@ if st.session_state.raw_data is not None:
     with c2:
         p_status = "BUON MARGINE" if avg_price > 12 else "BASSO MARGINE"
         p_color = "status-green" if avg_price > 12 else "status-red"
-        st.markdown(f"<div class='profit-card'><p style='color:#8b949e;'>ECONOMIA</p><h2 class='{p_color}'>{p_status}</h2><p>Prezzo medio: {avg_price:.2f}€</p></div>", unsafe_allow_html=True)
+        st.markdown(f<div class='profit-card'><p style='color:#8b949e;'>ECONOMIA</p><h2 class='{p_color}'>{p_status}</h2><p>Prezzo medio: {avg_price:.2f}€</p></div>", unsafe_allow_html=True)
 
     with c3:
         verdict = "ECCELLENTE" if avg_bsr < 80000 and avg_price > 12 else "VALUTARE"
@@ -139,21 +137,14 @@ if st.session_state.raw_data is not None:
     st.markdown("---")
 
     # ==============================================================================
-    # 4. TABELLA DATI COMPLETA
+    # 4. TABELLA DATI COMPLETA & STEP 2 AI (AGGIORNATO)
     # ==============================================================================
     col_table, col_ai = st.columns([7, 3])
     
     with col_table:
         st.markdown("<p style='font-weight:bold; font-size:1.2rem;'>Dati Estratti (BSR Globale Corretto)</p>", unsafe_allow_html=True)
-        
-        # Elenco esatto delle colonne da mostrare
         cols_to_show = ["Copertina", "ID", "Titolo", "BSR", "Prezzo", "Autore", "Recensioni"]
-        
-        st.dataframe(
-            df[cols_to_show], 
-            use_container_width=True, 
-            hide_index=True,
-            height=600,
+        st.dataframe(df[cols_to_show], use_container_width=True, hide_index=True, height=600,
             column_config={
                 "Copertina": st.column_config.ImageColumn("Cover", width="small"),
                 "Titolo": st.column_config.TextColumn("Titolo", width="large"),
@@ -166,8 +157,47 @@ if st.session_state.raw_data is not None:
         st.markdown("<div class='ai-panel'>", unsafe_allow_html=True)
         st.markdown("<h3>✨ AI Strategy Lab</h3>", unsafe_allow_html=True)
         nicchia_target = st.text_input("Nicchia analizzata")
+        
+        # --- LOGICA AI AGGIUNTA QUI ---
         if st.button("🪄 GENERA STRATEGIA"):
-            st.info(f"Strategia per {nicchia_target} in elaborazione...")
+            if nicchia_target:
+                with st.spinner("L'AI sta analizzando la nicchia e i concorrenti..."):
+                    try:
+                        # Recupera i primi 5 titoli della tabella per dare contesto all'IA
+                        top_competitors = ", ".join(df['Titolo'].dropna().head(5).tolist())
+                        
+                        client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+                        
+                        system_prompt = f"Sei un esperto mondiale di marketing su Amazon KDP per il mercato {mkt}."
+                        user_prompt = f"""
+                        Analizza la nicchia: "{nicchia_target}".
+                        Dati rilevati: BSR medio di {int(avg_bsr)} e Prezzo medio di {avg_price:.2f}€.
+                        Competitors principali: {top_competitors}.
+
+                        Genera una strategia vincente:
+                        1. 5 Potenziali Titoli magnetici ad alta conversione.
+                        2. 5 Sottotitoli SEO-Optimized.
+                        3. Breve consiglio su quale 'angolo' di marketing usare per battere questi concorrenti.
+                        """
+
+                        response = client.chat.completions.create(
+                            model="gpt-4o",
+                            messages=[
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user", "content": user_prompt}
+                            ]
+                        )
+                        st.session_state.suggestions = response.choices[0].message.content
+                    except Exception as e:
+                        st.error(f"Errore: {e}")
+            else:
+                st.warning("Inserisci il nome della nicchia prima di generare.")
+        
+        if st.session_state.suggestions:
+            st.markdown("---")
+            st.markdown(st.session_state.suggestions)
+        # ------------------------------
+        
         st.markdown("</div>", unsafe_allow_html=True)
 else:
     st.info("🌙 Carica i tuoi file CSV per iniziare l'analisi di mercato.")
