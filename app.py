@@ -5,19 +5,20 @@ import re
 import numpy as np
 
 # ==============================================================================
-# 1. DESIGN SYSTEM
+# 1. DESIGN SYSTEM (TOTAL DARK + NO MENUS)
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 17.0", page_icon="💰", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 17.1", page_icon="💰", layout="wide")
 
 st.markdown("""
     <style>
-        /* RIMOZIONE MENU IN ALTO A DESTRA E FOOTER IN BASSO A DESTRA */
+        /* RIMOZIONE MENU STREAMLIT */
         #MainMenu {visibility: hidden;}
         header {visibility: hidden;}
         footer {visibility: hidden;}
         .stAppHeader {display:none;}
         [data-testid="collapsedControl"] { display: none !important; }
 
+        /* TEMA DARK */
         .stApp { background-color: #0d1117 !important; color: #c9d1d9 !important; }
         section[data-testid="stSidebar"] { background-color: #161b22 !important; border-right: 1px solid #30363d; }
         .program-title { color: #58a6ff !important; font-size: 2.2rem !important; font-weight: 800; border-bottom: 2px solid #30363d; padding-bottom: 0.5rem; margin-bottom: 1.5rem; }
@@ -30,13 +31,13 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='program-title'>KDP Intelligence Hub v17.0 💰</div>", unsafe_allow_html=True)
+st.markdown("<div class='program-title'>KDP Intelligence Hub v17.1 💰</div>", unsafe_allow_html=True)
 
 if 'raw_data' not in st.session_state: st.session_state.raw_data = None
 if 'ai_output' not in st.session_state: st.session_state.ai_output = None
 
 # ==============================================================================
-# 2. LOGICA DI ESTRAZIONE (BACKEND ANTI-CRASH)
+# 2. LOGICA DI ESTRAZIONE
 # ==============================================================================
 with st.sidebar:
     st.header("📥 Configurazione")
@@ -56,14 +57,13 @@ with st.sidebar:
                 cols = df_raw.columns.tolist()
                 temp = pd.DataFrame(index=df_raw.index)
                 
-                # INIZIALIZZAZIONE FORZATA DELLE COLONNE
-                target_cols = ["Copertina", "Titolo", "BSR", "Prezzo", "Autore", "Recensioni"]
-                for c in target_cols:
+                # Inizializzazione colonne target
+                for c in ["Copertina", "Titolo", "BSR", "Prezzo", "Autore", "Recensioni"]:
                     temp[c] = np.nan
 
                 bsrs, authors = [], []
                 for _, row in df_raw.iterrows():
-                    # Radar BSR Reale
+                    # TRUE BSR RADAR
                     ranks = []
                     for v in row.dropna():
                         v_s = str(v)
@@ -75,41 +75,40 @@ with st.sidebar:
                                 except: continue
                     bsrs.append(max(ranks) if ranks else np.nan)
                     
-                    # Logic Autore
+                    # LOGICA AUTORE
                     auth = "N/D"
                     for i, c in enumerate(cols):
                         cell_val = str(row[c])
                         if "author" in str(c).lower() or cell_val.lower() == "author":
-                            if cell_val.lower() == "author" and i+1 < len(cols):
-                                auth = str(row[cols[i+1]])
-                            else:
-                                auth = cell_val
+                            auth = str(row[cols[i+1]]) if cell_val.lower() == "author" and i+1 < len(cols) else cell_val
                             break
                     authors.append(re.sub(r'^(di|by|Author:)\s+', '', auth, flags=re.IGNORECASE))
 
                 temp['BSR'] = bsrs
                 temp['Autore'] = authors
                 
-                img_c = next((c for c in cols if any(k in c.lower() for k in ['s-image src', 'image', 'copertina', 'src', 'dynamic-image'])), None)
+                # MAPPING COLONNE
+                img_c = next((c for c in cols if any(k in c.lower() for k in ['s-image src', 'image', 'copertina', 'src'])), None)
                 if img_c: temp['Copertina'] = df_raw[img_c]
 
-                tit_c = next((c for c in cols if any(k in c.lower() for k in ['a-size-medium', 'title', 'titolo', 'name', 'clamp'])), None)
+                tit_c = next((c for c in cols if any(k in c.lower() for k in ['a-size-medium', 'title', 'titolo', 'name'])), None)
                 if tit_c: temp['Titolo'] = df_raw[tit_c]
 
-                p_c = next((c for c in cols if any(k in c.lower() for k in ['a-offscreen', 'price', 'prezzo', 'a-price-whole'])), None)
+                p_c = next((c for c in cols if any(k in c.lower() for k in ['a-offscreen', 'price', 'prezzo'])), None)
                 if p_c: temp['Prezzo'] = pd.to_numeric(df_raw[p_c].astype(str).str.replace(r'[^\d.,]', '', regex=True).str.replace(',', '.'), errors='coerce')
                 
-                rev_c = next((c for c in cols if any(k in c.lower() for k in ['review', 'voti', 'rating', 'a-size-base', 'a-size-small'])), None)
+                rev_c = next((c for c in cols if any(k in c.lower() for k in ['review', 'voti', 'rating', 'a-size-base'])), None)
                 if rev_c:
-                    def clean_rev(v):
+                    def cl_rev(v):
                         n = re.findall(r'\b\d+\b', str(v).replace('.','').replace(',',''))
                         return int(max(n, key=int)) if n else np.nan
-                    temp['Recensioni'] = df_raw[rev_c].apply(clean_rev)
+                    temp['Recensioni'] = df_raw[rev_c].apply(cl_rev)
                 
                 all_dfs.append(temp)
             
             st.session_state.raw_data = pd.concat(all_dfs, ignore_index=True)
             st.session_state.raw_data.insert(1, 'ID', range(1, len(st.session_state.raw_data) + 1))
+            st.session_state.ai_output = None
             st.rerun()
 
     if st.button("🔄 RESET"):
@@ -118,7 +117,7 @@ with st.sidebar:
         st.rerun()
 
 # ==============================================================================
-# 3. PROFITABILITY ANALYSIS (FIX SYNTAX ERROR)
+# 3. PROFITABILITY ANALYSIS (FIX SYNTAX ERROR DEFINITIVO)
 # ==============================================================================
 if st.session_state.raw_data is not None:
     df = st.session_state.raw_data.copy()
@@ -131,7 +130,7 @@ if st.session_state.raw_data is not None:
     
     with c1:
         if avg_bsr < 80000: status, color, desc = "PROFITTABILITÀ ALTA", "status-green", "Volume di vendite elevato. Ottima nicchia."
-        elif avg_bsr < 150000: status, color, desc = "PROFITTABILITÀ MEDIA", "status-yellow", "Richiede sforzo pubblicitario."
+        elif avg_bsr < 150000: status, color, desc = "PROFITTABILITÀ MEDIA", "status-yellow", "Richiede Ads attive."
         else: status, color, desc = "PROFITTABILITÀ BASSA", "status-red", "Poche vendite o mercato saturo."
         st.markdown(f"<div class='profit-card'><p style='color:#8b949e;'>VENDITE STIMATE</p><h2 class='{color}'>{status}</h2><p>{desc}</p></div>", unsafe_allow_html=True)
 
@@ -147,18 +146,14 @@ if st.session_state.raw_data is not None:
     st.markdown("---")
 
     # ==============================================================================
-    # 4. TABELLA DATI & AI STRATEGY LAB
+    # 4. DATA TABLE & AI STRATEGY LAB
     # ==============================================================================
     col_table, col_ai = st.columns([7, 3])
     
     with col_table:
-        st.markdown("<p style='font-weight:bold; font-size:1.2rem;'>Dati Estratti (BSR Globale Corretto)</p>", unsafe_allow_html=True)
+        st.markdown("<p style='font-weight:bold; font-size:1.2rem;'>Dati Estratti (BSR Globale)</p>", unsafe_allow_html=True)
         cols_to_show = ["Copertina", "ID", "Titolo", "BSR", "Prezzo", "Autore", "Recensioni"]
-        st.dataframe(
-            df[cols_to_show], 
-            use_container_width=True, 
-            hide_index=True,
-            height=600,
+        st.dataframe(df[cols_to_show], use_container_width=True, hide_index=True, height=600,
             column_config={
                 "Copertina": st.column_config.ImageColumn("Cover", width="small"),
                 "Titolo": st.column_config.TextColumn("Titolo", width="large"),
@@ -174,39 +169,33 @@ if st.session_state.raw_data is not None:
         
         if st.button("🪄 GENERA STRATEGIA"):
             if nicchia_target:
-                with st.spinner("L'AI sta analizzando i titoli dei competitor..."):
-                    client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                    
-                    # Estraiamo i titoli reali dalla tabella per darli in pasto all'AI
-                    competitor_titles = "\n".join(df['Titolo'].head(10).astype(str).tolist())
-                    
-                    prompt = f"""
-                    Sei un esperto di KDP Publishing e SEO Amazon per il mercato {mkt}.
-                    Nicchia analizzata: {nicchia_target}
-                    BSR Medio rilevato: {int(avg_bsr)}
-                    Prezzo Medio: {avg_price:.2f}€
-                    
-                    Ecco i titoli reali dei principali concorrenti in questa categoria:
-                    {competitor_titles}
-                    
-                    BASANDOTI SUI TITOLI SOPRA, genera una strategia vincente:
-                    1. Suggerisci 5 potenziali titoli magnetici (titolo principale) che possano superare questi concorrenti.
-                    2. Suggerisci 5 sottotitoli SEO con parole chiave ad alto volume per questa nicchia.
-                    3. Spiega brevemente perché questi nuovi titoli dovrebbero funzionare meglio rispetto a quelli esistenti.
-                    """
-                    
-                    response = client.chat.completions.create(
-                        model="gpt-4o",
-                        messages=[{"role": "user", "content": prompt}]
-                    )
-                    st.session_state.ai_output = response.choices[0].message.content
+                with st.spinner("L'IA sta analizzando i competitor..."):
+                    try:
+                        client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+                        top_titles = "\n".join(df['Titolo'].head(10).astype(str).tolist())
+                        
+                        prompt = f"""
+                        Sei un esperto di KDP Marketing per il marketplace {mkt}.
+                        Nicchia: {nicchia_target}
+                        Competitors attuali:
+                        {top_titles}
+                        
+                        BASANDOTI SU QUESTI COMPETITOR, genera:
+                        1. 5 Titoli "Killer" che catturino l'attenzione.
+                        2. 5 Sottotitoli SEO per scalare il ranking.
+                        3. Spiega perché questi titoli batteranno i competitor sopra elencati.
+                        """
+                        
+                        response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}])
+                        st.session_state.ai_output = response.choices[0].message.content
+                    except Exception as e:
+                        st.error(f"Errore: {e}")
             else:
-                st.warning("Inserisci il nome della nicchia per procedere.")
+                st.warning("Inserisci il nome della nicchia.")
 
         if st.session_state.ai_output:
             st.markdown("---")
             st.markdown(st.session_state.ai_output)
-            
         st.markdown("</div>", unsafe_allow_html=True)
 else:
     st.info("🌙 Carica i tuoi file CSV per iniziare l'analisi di mercato.")
