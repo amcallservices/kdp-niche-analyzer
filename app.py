@@ -7,7 +7,7 @@ import numpy as np
 # ==============================================================================
 # 1. DESIGN SYSTEM - TOTAL DARK MODE
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 16.3", page_icon="🌙", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 16.4", page_icon="🌙", layout="wide")
 
 st.markdown("""
     <style>
@@ -24,13 +24,13 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='program-title'>KDP Market Intelligence Hub v16.3 🌙</div>", unsafe_allow_html=True)
+st.markdown("<div class='program-title'>KDP Market Intelligence Hub v16.4 🌙</div>", unsafe_allow_html=True)
 
 if 'raw_data' not in st.session_state: st.session_state.raw_data = None
 if 'suggestions' not in st.session_state: st.session_state.suggestions = None
 
 # ==============================================================================
-# 2. SIDEBAR - LOGICA BSR REALE E FIX TYPEERROR
+# 2. SIDEBAR - LOGICA TRUE BSR (EVITA BSR FALSATI)
 # ==============================================================================
 with st.sidebar:
     st.markdown("<p style='font-weight:700; color:#58a6ff;'>📥 CARICAMENTO DATI</p>", unsafe_allow_html=True)
@@ -55,63 +55,65 @@ with st.sidebar:
                 cols = df_raw.columns.tolist()
                 temp = pd.DataFrame(index=df_raw.index)
                 
-                # Inizializziamo liste per i dati estratti riga per riga
-                bsr_real_list = []
-                author_list = []
+                # Inizializzazione colonne per evitare KeyError
+                for c in ["Copertina", "BSR", "Titolo", "Prezzo", "Recensioni", "Nome Autore", "Categoria Editore"]:
+                    temp[c] = np.nan
+
+                bsr_list = []
+                auth_list = []
 
                 for idx, row in df_raw.iterrows():
-                    # --- FIX BSR FALSATO: CERCA IL NUMERO PIÙ ALTO (TRUE RANK) ---
+                    # --- LOGICA TRUE BSR: Cerca tutti i numeri col # e prendi il più alto (Global Rank) ---
                     found_ranks = []
-                    for val in row:
-                        val_str = str(val) # FIX TYPEERROR: converte sempre in stringa
-                        if '#' in val_str:
-                            match = re.search(r'(\d{1,3}(?:[.,]\d{3})*|\d+)', val_str)
-                            if match:
+                    for val in row.dropna():
+                        val_s = str(val)
+                        if '#' in val_s:
+                            nums = re.findall(r'(\d{1,3}(?:[.,]\d{3})*|\d+)', val_s)
+                            for n_str in nums:
                                 try:
-                                    n = int(match.group(1).replace('.','').replace(',',''))
+                                    n = int(n_str.replace('.','').replace(',',''))
                                     found_ranks.append(n)
                                 except: continue
-                    # Se ci sono più numeri (es #1 e #11.290), prendiamo il più alto (il rank globale)
-                    bsr_real_list.append(max(found_ranks) if found_ranks else np.nan)
+                    # Prendiamo il valore massimo trovato nella riga
+                    bsr_list.append(max(found_ranks) if found_ranks else np.nan)
 
-                    # --- FIX AUTORE: CERCA "Author" NELLE COLONNE ---
+                    # --- LOGICA AUTORE ---
                     a_name = "N/D"
                     for i, c in enumerate(cols):
-                        cell_val = str(row[c]).strip()
-                        if "author" in str(c).lower() or cell_val.lower() == "author":
-                            if cell_val.lower() == "author" and (i+1) < len(cols):
+                        val_c = str(row[c]).strip()
+                        if "author" in str(c).lower() or val_c.lower() == "author":
+                            if val_c.lower() == "author" and (i+1) < len(cols):
                                 a_name = str(row[cols[i+1]])
-                            else:
-                                a_name = cell_val
+                            else: a_name = val_c
                             break
-                    author_list.append(re.sub(r'^(di|by|Author:)\s+', '', a_name, flags=re.IGNORECASE))
+                    auth_list.append(re.sub(r'^(di|by|Author:)\s+', '', a_name, flags=re.IGNORECASE))
 
-                temp['BSR'] = bsr_real_list
-                temp['Nome Autore'] = author_list
+                temp['BSR'] = bsr_list
+                temp['Nome Autore'] = auth_list
                 
-                # --- ALTRI MAPPING STANDARD ---
+                # Altri mapping
                 def find_c(keys):
                     for k in keys:
                         for c in cols:
                             if k.lower() in str(c).lower().strip(): return c
                     return None
 
-                img_c = find_c(['s-image src', 'image', 'src'])
-                temp['Copertina'] = df_raw[img_c] if img_c else None
+                img = find_c(['s-image src', 'image', 'src'])
+                if img: temp['Copertina'] = df_raw[img]
                 
                 t_c = find_c(['a-size-medium', 'title', 'titolo', 'clamp'])
                 raw_t = df_raw[t_c].fillna("N/D").astype(str) if t_c else pd.Series(["N/D"]*len(df_raw))
-                link_c = find_c(['href', 'url', 'link'])
-                def f_url(i):
-                    if not link_c: return None
-                    v = str(df_raw.iloc[i][link_c])
+                link = find_c(['href', 'url', 'link'])
+                def get_u(i):
+                    if not link: return None
+                    v = str(df_raw.iloc[i][link])
                     return v if 'http' in v else f"{base_url}{v}"
-                temp['Titolo'] = [f"[{str(t).replace('[','').replace(']','')}]({f_url(i)})" if f_url(i) else str(t) for i, t in enumerate(raw_t)]
+                temp['Titolo'] = [f"[{str(t).replace('[','').replace(']','')}]({get_u(i)})" if get_u(i) else str(t) for i, t in enumerate(raw_t)]
                 
                 p_c = find_c(['a-offscreen', 'price', 'prezzo'])
                 if p_c: temp['Prezzo'] = pd.to_numeric(df_raw[p_c].astype(str).str.replace(r'[^\d.,]', '', regex=True).str.replace(',', '.'), errors='coerce')
                 
-                r_c = find_c(['a-size-mini', 'voti', 'review'])
+                r_c = find_c(['a-size-mini', 'voti', 'review', 'rating'])
                 if r_c:
                     def cl_r(v):
                         n = re.findall(r'\b\d+\b', str(v).replace('.','').replace(',',''))
@@ -119,7 +121,6 @@ with st.sidebar:
                     temp['Recensioni'] = df_raw[r_c].apply(cl_r)
 
                 temp['Categoria Editore'] = temp['Nome Autore'].apply(lambda x: "Independent" if any(s in str(x).lower() for s in ['independently', 'kdp', 'indipendente']) else "Publishing House")
-
                 all_dfs.append(temp)
             
             st.session_state.raw_data = pd.concat(all_dfs, ignore_index=True)
@@ -142,8 +143,8 @@ if st.session_state.raw_data is not None:
         st.markdown(f"<div class='section-title'>Market: {st.session_state.selected_market}</div>", unsafe_allow_html=True)
         m1, m2, m3 = st.columns(3)
         m1.metric("Libri", len(df))
-        m2.metric("Prezzo Avg", f"{df['Prezzo'].mean():.2f} €" if pd.notna(df['Prezzo'].mean()) else "N/D")
-        m3.metric("BSR Reale Avg", f"{int(df['BSR'].mean()):,}".replace(',', '.') if pd.notna(df['BSR'].mean()) else "N/D")
+        m2.metric("Prezzo Medio", f"{df['Prezzo'].mean():.2f} €" if pd.notna(df['Prezzo'].mean()) else "N/D")
+        m3.metric("BSR Reale Medio", f"{int(df['BSR'].mean()):,}".replace(',', '.') if pd.notna(df['BSR'].mean()) else "N/D")
         
         st.dataframe(
             df[["Copertina", "N. Libro", "BSR", "Titolo", "Prezzo", "Recensioni", "Nome Autore"]], 
@@ -163,7 +164,7 @@ if st.session_state.raw_data is not None:
         if st.button("🪄 GENERA STRATEGIA", type="primary"):
             if nicchia and target:
                 client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                res = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": f"Analizza nicchia {nicchia} per {target} su KDP."}])
+                res = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": f"Analisi per {nicchia}."}])
                 st.session_state.suggestions = res.choices[0].message.content
         if st.session_state.suggestions:
             st.markdown(st.session_state.suggestions)
