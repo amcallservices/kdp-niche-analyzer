@@ -7,7 +7,7 @@ import numpy as np
 # ==============================================================================
 # 1. DESIGN SYSTEM
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 14.1", page_icon="📈", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 14.3", page_icon="📈", layout="wide")
 
 st.markdown("""
     <style>
@@ -29,7 +29,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='program-title'>KDP Market Intelligence Hub v14.1</div>", unsafe_allow_html=True)
+st.markdown("<div class='program-title'>KDP Market Intelligence Hub v14.3</div>", unsafe_allow_html=True)
 
 # --- STATO ---
 for key in ['raw_data', 'suggestions', 'selected_market', 'pub_filter', 'raw_cols']:
@@ -53,7 +53,6 @@ with st.sidebar:
     if st.button("📊 Elabora Dati", type="primary"):
         if uploaded_file:
             try:
-                # 1. Lettura robusta del CSV
                 try:
                     df_raw = pd.read_csv(uploaded_file, sep=None, engine='python', encoding='utf-8', on_bad_lines='skip')
                 except:
@@ -70,20 +69,21 @@ with st.sidebar:
                             if k.lower() in clean_c: return c
                     return None
 
-                mapped_df = pd.DataFrame()
+                mapped_df = pd.DataFrame(index=df_raw.index)
                 
                 # --- A: COPERTINA ---
-                img_col = find_col(['src', 'image', 'img', 'thumbnail', 'copertina'])
+                img_col = find_col(['a-dynamic-image src', 'src', 'image', 'img', 'thumbnail', 'copertina'])
                 mapped_df['Copertina'] = df_raw[img_col] if img_col else None
                 
                 # --- B: ID SEQUENZIALE ---
                 mapped_df['N. Libro'] = range(1, len(df_raw) + 1)
                 
-                # --- C: TITOLO E LINK (Cliccabile) ---
-                t_col = find_col(['line-clamp', 'title', 'titolo', 'name', 'nome'])
-                raw_titles = df_raw[t_col].astype(str).replace('nan', 'Titolo non trovato') if t_col else pd.Series(["N/D"] * len(df_raw))
+                # --- C: TITOLO E LINK (Cliccabile con FIX per i Float/NaN) ---
+                t_col = find_col(['_cdezb_p13n-sc-css-line-clamp-1_1fn1y', 'title', 'titolo', 'name', 'nome'])
+                # FIX: Riempiamo i valori vuoti con una stringa per evitare errori 'float' object has no attribute 'replace'
+                raw_titles = df_raw[t_col].fillna("Titolo non disponibile").astype(str) if t_col else pd.Series(["N/D"] * len(df_raw))
                 
-                link_col = find_col(['href', 'url', 'link'])
+                link_col = find_col(['a-link-normal href', 'href', 'url', 'link'])
                 asin_col = find_col(['asin', 'id'])
                 
                 def make_url(row_idx):
@@ -96,18 +96,16 @@ with st.sidebar:
                         if len(asin_val) >= 10: return f"{base_url}/dp/{asin_val[:10]}"
                     return None
 
-                # Genera il link Markdown per Streamlit
-                mapped_df['Titolo'] = [f"[{t.replace('[','').replace(']','')}]({make_url(i)})" if make_url(i) else t for i, t in enumerate(raw_titles)]
+                # Forziamo str(t) per sicurezza assoluta
+                mapped_df['Titolo'] = [f"[{str(t).replace('[','').replace(']','')}]({make_url(i)})" if make_url(i) else str(t) for i, t in enumerate(raw_titles)]
                 
                 # --- D: BSR (Rank) ---
-                # 'zg-bdg-text' è esattamente come Instant Data Scraper chiama il BSR in pagina
                 b_col = find_col(['zg-bdg-text', 'bsr', 'rank', 'classifica', 'sales', 'best'])
                 if b_col:
                     def estrai_bsr_estremo(testo):
                         try:
                             t = str(testo).lower()
                             if t == 'nan' or t == 'none' or t == '' or pd.isna(testo): return np.nan
-                            # Prende solo il numero "puro" rimuovendo cancelletti (es. #1 diventa 1)
                             match = re.search(r'\b(\d{1,3}(?:[.,]\d{3})*|\d+)\b', t)
                             if match:
                                 numero_pulito = match.group(1).replace('.', '').replace(',', '')
@@ -120,16 +118,24 @@ with st.sidebar:
                     mapped_df['BSR'] = np.nan
                 
                 # --- E: PREZZO ---
-                p_col = find_col(['price', 'prezzo', 'costo'])
+                p_col = find_col(['p13n-sc-price', '_cdezb_p13n-sc-price_3mj9z', 'price', 'prezzo', 'costo'])
                 if p_col:
                     mapped_df['Prezzo'] = pd.to_numeric(df_raw[p_col].astype(str).str.replace(r'[^\d.,]', '', regex=True).str.replace(',', '.'), errors='coerce')
                 else:
                     mapped_df['Prezzo'] = np.nan
                 
                 # --- F: RECENSIONI E AUTORE ---
-                r_col = find_col(['review', 'rating', 'recensioni', 'voti', 'count', 'a-size-small'])
+                r_col = find_col(['a-size-small', 'a-icon-alt', 'review', 'rating', 'recensioni', 'voti', 'count'])
                 if r_col:
-                    mapped_df['Recensioni'] = pd.to_numeric(df_raw[r_col].astype(str).str.replace(r'[^\d]', '', regex=True), errors='coerce')
+                    # Usiamo regex per cercare di estrarre un numero valido (le recensioni totali, non le stelle)
+                    def estrai_recensioni(testo):
+                        testo = str(testo).replace('.', '').replace(',', '')
+                        numeri = re.findall(r'\b\d+\b', testo)
+                        # Se è 'a-size-small', di solito il primo numero sono i voti. Se 'a-icon-alt' è tipo "4.5 out of 5 stars".
+                        if numeri:
+                            return int(max(numeri, key=int)) # Prende il numero più alto trovato per evitare le stelle
+                        return np.nan
+                    mapped_df['Recensioni'] = df_raw[r_col].apply(estrai_recensioni)
                 else:
                     mapped_df['Recensioni'] = np.nan
 
@@ -150,7 +156,7 @@ with st.sidebar:
         with st.expander("🔍 Mapping Helper (Diagnostica CSV)"):
             st.write(st.session_state.raw_cols)
 
-    if st.button("🔄 Reset"):
+    if st.button("🔄 Reset (Clicca in caso di errore)"):
         st.session_state.raw_data = None
         st.session_state.suggestions = None
         st.session_state.raw_cols = None
@@ -179,9 +185,9 @@ if st.session_state.raw_data is not None:
         
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # Ordiniamo le colonne per dare priorità all'immagine, all'ID e al BSR
-        col_order = ["Copertina", "N. Libro", "BSR", "Titolo", "Prezzo", "Recensioni", "Editore"]
-        df_display = df[col_order]
+        desired_order = ["Copertina", "N. Libro", "BSR", "Titolo", "Prezzo", "Recensioni", "Editore"]
+        actual_order = [c for c in desired_order if c in df.columns]
+        df_display = df[actual_order]
         
         st.dataframe(
             df_display, 
