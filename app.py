@@ -7,10 +7,17 @@ import numpy as np
 # ==============================================================================
 # 1. DESIGN SYSTEM
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 16.8", page_icon="💰", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 16.7", page_icon="💰", layout="wide")
 
 st.markdown("""
     <style>
+        /* RIMOZIONE MENU IN ALTO A DESTRA E FOOTER IN BASSO A DESTRA */
+        #MainMenu {visibility: hidden;}
+        header {visibility: hidden;}
+        footer {visibility: hidden;}
+        .stAppHeader {display:none;}
+        [data-testid="collapsedControl"] { display: none !important; }
+
         .stApp { background-color: #0d1117 !important; color: #c9d1d9 !important; }
         section[data-testid="stSidebar"] { background-color: #161b22 !important; border-right: 1px solid #30363d; }
         .program-title { color: #58a6ff !important; font-size: 2.2rem !important; font-weight: 800; border-bottom: 2px solid #30363d; padding-bottom: 0.5rem; margin-bottom: 1.5rem; }
@@ -23,7 +30,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='program-title'>KDP Intelligence Hub v16.8 💰</div>", unsafe_allow_html=True)
+st.markdown("<div class='program-title'>KDP Intelligence Hub v16.9 💰</div>", unsafe_allow_html=True)
 
 if 'raw_data' not in st.session_state: st.session_state.raw_data = None
 if 'ai_output' not in st.session_state: st.session_state.ai_output = None
@@ -49,12 +56,14 @@ with st.sidebar:
                 cols = df_raw.columns.tolist()
                 temp = pd.DataFrame(index=df_raw.index)
                 
+                # INIZIALIZZAZIONE FORZATA DELLE COLONNE (Previene il KeyError)
                 target_cols = ["Copertina", "Titolo", "BSR", "Prezzo", "Autore", "Recensioni"]
                 for c in target_cols:
                     temp[c] = np.nan
 
                 bsrs, authors = [], []
                 for _, row in df_raw.iterrows():
+                    # Radar BSR Reale (Sempre il numero più alto trovato nella riga)
                     ranks = []
                     for v in row.dropna():
                         v_s = str(v)
@@ -66,6 +75,7 @@ with st.sidebar:
                                 except: continue
                     bsrs.append(max(ranks) if ranks else np.nan)
                     
+                    # Logic Autore
                     auth = "N/D"
                     for i, c in enumerate(cols):
                         cell_val = str(row[c])
@@ -80,6 +90,7 @@ with st.sidebar:
                 temp['BSR'] = bsrs
                 temp['Autore'] = authors
                 
+                # Mapping Avanzato Colonne
                 img_c = next((c for c in cols if any(k in c.lower() for k in ['s-image src', 'image', 'copertina', 'src', 'dynamic-image'])), None)
                 if img_c: temp['Copertina'] = df_raw[img_c]
 
@@ -128,7 +139,6 @@ if st.session_state.raw_data is not None:
     with c2:
         p_status = "BUON MARGINE" if avg_price > 12 else "BASSO MARGINE"
         p_color = "status-green" if avg_price > 12 else "status-red"
-        # FIX: Aggiunte virgolette mancanti qui sotto
         st.markdown(f"<div class='profit-card'><p style='color:#8b949e;'>ECONOMIA</p><h2 class='{p_color}'>{p_status}</h2><p>Prezzo medio: {avg_price:.2f}€</p></div>", unsafe_allow_html=True)
 
     with c3:
@@ -144,7 +154,9 @@ if st.session_state.raw_data is not None:
     
     with col_table:
         st.markdown("<p style='font-weight:bold; font-size:1.2rem;'>Dati Estratti (BSR Globale Corretto)</p>", unsafe_allow_html=True)
+        
         cols_to_show = ["Copertina", "ID", "Titolo", "BSR", "Prezzo", "Autore", "Recensioni"]
+        
         st.dataframe(
             df[cols_to_show], 
             use_container_width=True, 
