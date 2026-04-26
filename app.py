@@ -7,7 +7,7 @@ import numpy as np
 # ==============================================================================
 # 1. DESIGN SYSTEM
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 13.8", page_icon="📈", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 13.9", page_icon="📈", layout="wide")
 
 st.markdown("""
     <style>
@@ -29,21 +29,20 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='program-title'>KDP Market Intelligence Hub v13.8</div>", unsafe_allow_html=True)
+st.markdown("<div class='program-title'>KDP Market Intelligence Hub v13.9</div>", unsafe_allow_html=True)
 
 # --- STATO ---
 for key in ['raw_data', 'suggestions', 'selected_market', 'pub_filter', 'raw_cols']:
     if key not in st.session_state: st.session_state[key] = None
 
 # ==============================================================================
-# 2. SIDEBAR (IMPORT E HYBRID MAPPING CON URL)
+# 2. SIDEBAR (LOGICA DI MAPPATURA UNIVERSALE)
 # ==============================================================================
 with st.sidebar:
     st.markdown("<p style='font-weight:700; color:#9ca3af; font-size:0.8rem;'>STEP 1: IMPORTA DATI</p>", unsafe_allow_html=True)
     mkt_choice = st.selectbox("Marketplace", ["IT", "US", "UK", "DE", "FR", "ES"])
     st.session_state.selected_market = mkt_choice
     
-    # Dizionario domini per costruire URL se abbiamo solo ASIN
     domain_map = {"IT": "amazon.it", "US": "amazon.com", "UK": "amazon.co.uk", "DE": "amazon.de", "FR": "amazon.fr", "ES": "amazon.es"}
     base_url = f"https://www.{domain_map[mkt_choice]}"
 
@@ -71,82 +70,70 @@ with st.sidebar:
 
                 mapped_df = pd.DataFrame()
                 
-                # 1. Copertina
-                img_col = find_col(['image', 'img', 'thumbnail', 'photo', 'url_image', 'src', 'copertina', 'a-dynamic-image'])
+                # 1. COPERTINA
+                img_col = find_col(['image', 'img', 'thumbnail', 'photo', 'src', 'a-dynamic-image'])
                 mapped_df['Copertina'] = df_raw[img_col] if img_col else None
                 
-                # 2. ID e TITOLO CLICCABILE
-                mapped_df['ID'] = range(1, len(df_raw) + 1)
+                # 2. TITOLO (Mapping Aggressivo)
+                t_col = find_col(['title', 'titolo', 'name', 'nome', 'product', 'text', 'a-size-medium', 'a-link-normal', 's-line-clamp'])
+                raw_titles = df_raw[t_col].astype(str).replace('nan', 'Titolo non trovato') if t_col else pd.Series(["N/D"] * len(df_raw))
                 
-                t_col = find_col(['title', 'titolo', 'name', 'nome', 'product', 'text', 'a-size-medium', 'a-link-normal'])
-                raw_titles = df_raw[t_col].astype(str).replace('nan', 'N/D') if t_col else pd.Series(["N/D"] * len(df_raw))
+                # 3. LINK & ASIN (Per rendere i titoli cliccabili)
+                link_col = find_col(['url', 'link', 'href', 'page url'])
+                asin_col = find_col(['asin', 'id'])
                 
-                # Cerca un URL diretto o un ASIN
-                link_col = find_col(['url', 'link', 'href', 'page'])
-                asin_col = find_col(['asin'])
-                
-                # Funzione per costruire il titolo cliccabile
-                def make_clickable(row_idx, title):
-                    if title == "N/D": return title
-                    
-                    final_url = ""
-                    # Priorità 1: Se c'è una colonna URL esplicita (e non è l'immagine)
-                    if link_col and 'image' not in link_col.lower() and 'img' not in link_col.lower():
+                def make_url(row_idx):
+                    if link_col:
                         val = str(df_raw.iloc[row_idx][link_col])
-                        if 'http' in val or 'amazon' in val:
-                            final_url = val if val.startswith('http') else f"{base_url}{val}"
-                    
-                    # Priorità 2: Se abbiamo trovato un ASIN
-                    if not final_url and asin_col:
+                        if 'http' in val: return val
+                        if val.startswith('/'): return f"{base_url}{val}"
+                    if asin_col:
                         asin_val = str(df_raw.iloc[row_idx][asin_col]).strip()
-                        if len(asin_val) >= 10: # L'ASIN è tipicamente di 10 caratteri
-                             final_url = f"{base_url}/dp/{asin_val}"
-                             
-                    if final_url:
-                        # Rimuove caratteri problematici per il markdown
-                        clean_title = title.replace('[', '').replace(']', '') 
-                        return f"[{clean_title}]({final_url})"
-                    return title
+                        if len(asin_val) >= 10: return f"{base_url}/dp/{asin_val[:10]}"
+                    return None
 
-                # Applica la funzione a tutti i titoli
-                mapped_df['Titolo'] = [make_clickable(i, title) for i, title in enumerate(raw_titles)]
+                # Creazione colonna Titolo Cliccabile
+                mapped_df['Titolo'] = [f"[{t}]({make_url(i)})" if make_url(i) else t for i, t in enumerate(raw_titles)]
                 
-                # 3. BSR
+                # 4. BSR (Pulizia Numerica Forzata)
                 b_col = find_col(['bsr', 'rank', 'classifica', 'sales', 'posizione', 'ranking', 'best sellers'])
                 if b_col:
-                    mapped_df['BSR'] = pd.to_numeric(df_raw[b_col].astype(str).str.replace(r'[^\d]', '', regex=True), errors='coerce')
+                    # Rimuove tutto ciò che non è un numero per evitare errori di conversione
+                    mapped_df['BSR'] = df_raw[b_col].astype(str).str.replace(r'[^\d]', '', regex=True)
+                    mapped_df['BSR'] = pd.to_numeric(mapped_df['BSR'], errors='coerce')
                 else:
                     mapped_df['BSR'] = np.nan
                 
-                # 4. Prezzo
+                # 5. PREZZO
                 p_col = find_col(['price', 'prezzo', 'list price', 'buy price', 'costo', 'a-offscreen', 'a-price'])
                 if p_col:
                     mapped_df['Prezzo'] = pd.to_numeric(df_raw[p_col].astype(str).str.replace(r'[^\d.,]', '', regex=True).str.replace(',', '.'), errors='coerce')
                 else:
                     mapped_df['Prezzo'] = np.nan
                 
-                # 5. Recensioni
-                r_col = find_col(['review count', 'ratings', 'recensioni', 'voti', 'reviews', 's-underline-text', 'a-size-base', 'rating-count'])
+                # 6. RECENSIONI
+                r_col = find_col(['review count', 'ratings', 'recensioni', 'voti', 'reviews', 's-underline-text', 'a-size-base', 'count'])
                 if r_col:
                     mapped_df['Recensioni'] = pd.to_numeric(df_raw[r_col].astype(str).str.replace(r'[^\d]', '', regex=True), errors='coerce')
                 else:
                     mapped_df['Recensioni'] = np.nan
 
-                # 6. Editore
-                e_col = find_col(['brand', 'manufacturer', 'author', 'editore', 'publisher', 'marca', 'vendor', 'byline', 'a-color-secondary'])
+                # 7. EDITORE
+                e_col = find_col(['brand', 'manufacturer', 'author', 'editore', 'publisher', 'marca', 'vendor', 'byline'])
                 if e_col:
-                    mapped_df['Editore'] = df_raw[e_col].apply(lambda x: "Independent" if any(s in str(x).lower() for s in ['independently', 'kdp', 'indipendente', 'createspace', 'self']) else "Publishing House")
+                    mapped_df['Editore'] = df_raw[e_col].apply(lambda x: "Independent" if any(s in str(x).lower() for s in ['independently', 'kdp', 'indipendente', 'createspace']) else "Publishing House")
                 else:
                     mapped_df['Editore'] = "N/D"
 
                 st.session_state.raw_data = mapped_df
+                st.success("Analisi completata!")
             except Exception as e:
-                st.error(f"Errore: {e}")
+                st.error(f"Errore tecnico: {e}")
         else:
             st.warning("Carica un file prima.")
 
     if st.session_state.raw_cols:
-        with st.expander("🛠️ Debug Colonne CSV"):
+        with st.expander("🔍 Mapping Helper (Nomi Colonne trovati)"):
             st.write(st.session_state.raw_cols)
 
     if st.button("🔄 Reset"):
@@ -166,29 +153,25 @@ if st.session_state.raw_data is not None:
     col_left, col_right = st.columns([7, 3], gap="large")
 
     with col_left:
-        st.markdown(f"<div class='section-title'>Dati Mercato ({st.session_state.selected_market})</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='section-title'>Mercato: {st.session_state.selected_market}</div>", unsafe_allow_html=True)
         
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Libri Analizzati", len(df))
-        p_mean = df['Prezzo'].mean()
-        c2.metric("Prezzo Medio", f"{p_mean:.2f} €" if pd.notna(p_mean) else "N/D")
-        b_mean = df['BSR'].mean()
-        c3.metric("BSR Medio", f"{int(b_mean)}" if pd.notna(b_mean) else "N/D")
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Libri", len(df))
+        m2.metric("Prezzo Avg", f"{df['Prezzo'].mean():.2f} €" if pd.notna(df['Prezzo'].mean()) else "N/D")
+        m3.metric("BSR Avg", f"{int(df['BSR'].mean())}" if pd.notna(df['BSR'].mean()) else "N/D")
         
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # St.dataframe supporta nativamente i link in formato Markdown!
         st.dataframe(
             df, 
             use_container_width=True, 
             height=700, 
             hide_index=True,
             column_config={
-                "Copertina": st.column_config.ImageColumn("Copertina"),
-                "ID": st.column_config.NumberColumn("ID", width="small"),
-                "Titolo": st.column_config.TextColumn("Titolo (Clicca per aprire)"), # Ora legge il link Markdown
-                "Prezzo": st.column_config.NumberColumn("Prezzo", format="%.2f €"),
-                "BSR": st.column_config.NumberColumn("BSR", format="%d"),
+                "Copertina": st.column_config.ImageColumn("Copertina", width="small"),
+                "Titolo": st.column_config.TextColumn("Titolo (Cliccabile)", width="large"),
+                "Prezzo": st.column_config.NumberColumn("Prezzo (€)", format="%.2f"),
+                "BSR": st.column_config.NumberColumn("BSR Rank", format="%d"),
                 "Recensioni": st.column_config.NumberColumn("Recensioni", format="%d")
             }
         )
@@ -196,22 +179,22 @@ if st.session_state.raw_data is not None:
     with col_right:
         st.markdown("<div class='ai-panel'>", unsafe_allow_html=True)
         st.markdown("<div class='section-title' style='margin-top:0;'>✨ AI Strategy Lab</div>", unsafe_allow_html=True)
-        nicchia = st.text_input("Nicchia", placeholder="es. Yoga per Anziani")
-        target = st.text_input("Target", placeholder="es. Principianti assoluti")
+        nicchia = st.text_input("Nicchia analizzata", placeholder="es. Ricette Sane")
+        target = st.text_input("Target Lettore", placeholder="es. Studenti fuori sede")
         
-        if st.button("🪄 Genera Strategia", type="primary"):
+        if st.button("🪄 Genera Idee KDP", type="primary"):
             if nicchia and target:
-                with st.spinner("L'AI sta analizzando i dati..."):
+                with st.spinner("L'AI sta studiando i dati..."):
                     client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                    prompt = f"Analizza la nicchia '{nicchia}' per il target '{target}' sul mercato {st.session_state.selected_market}. Fornisci 3 titoli KDP magnetici, sottotitoli SEO e una trama breve basata sui dati importati."
+                    prompt = f"Basandoti sul mercato KDP {st.session_state.selected_market}, analizza la nicchia '{nicchia}' per il target '{target}'. Suggerisci 3 titoli magnetici, sottotitoli SEO e una trama persuasiva."
                     response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}])
                     st.session_state.suggestions = response.choices[0].message.content
             else:
-                st.error("Riempi i campi.")
+                st.error("Riempi i campi nicchia e target.")
         
         if st.session_state.suggestions:
             st.markdown("---")
             st.markdown(st.session_state.suggestions)
         st.markdown("</div>", unsafe_allow_html=True)
 else:
-    st.info("👈 Carica il tuo file CSV nella sidebar per visualizzare l'analisi completa.")
+    st.info("👈 Carica il file CSV nella sidebar. Se i dati non appaiono, controlla il pannello 'Mapping Helper' nella sidebar.")
