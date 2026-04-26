@@ -2,11 +2,12 @@ import streamlit as st
 import pandas as pd
 import openai
 import re
+import numpy as np
 
 # ==============================================================================
 # 1. DESIGN SYSTEM: PREMIUM SAAS DASHBOARD (IMPORT EDITION)
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 13.0", page_icon="📈", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 13.1", page_icon="📈", layout="wide")
 
 st.markdown("""
     <style>
@@ -72,7 +73,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='program-title'>KDP Market Intelligence Hub v13</div>", unsafe_allow_html=True)
+st.markdown("<div class='program-title'>KDP Market Intelligence Hub v13.1</div>", unsafe_allow_html=True)
 
 # ==============================================================================
 # 2. GESTIONE STATO
@@ -98,11 +99,7 @@ with st.sidebar:
     if st.button("📊 Elabora Dati Caricati", type="primary"):
         if uploaded_file is not None:
             try:
-                # Carichiamo il CSV
                 df_raw = pd.read_csv(uploaded_file)
-                
-                # LOGICA DI MAPPING INTELLIGENTE
-                # Cerchiamo di capire quali colonne corrispondono ai nostri dati
                 cols = df_raw.columns.tolist()
                 
                 def find_col(keywords):
@@ -113,31 +110,36 @@ with st.sidebar:
 
                 mapped_df = pd.DataFrame()
                 
-                # Mappatura Titolo
-                t_col = find_col(['title', 'titolo', 'product name'])
-                if t_col: mapped_df['Titolo'] = df_raw[t_col]
+                # Mappatura Sicura (Crea la colonna anche se non trova i dati)
+                t_col = find_col(['title', 'titolo', 'product name', 'name', 'nome'])
+                mapped_df['Titolo'] = df_raw[t_col] if t_col else ["N/D"] * len(df_raw)
                 
-                # Mappatura BSR
-                b_col = find_col(['bsr', 'rank', 'classifica'])
-                if b_col: mapped_df['BSR'] = df_raw[b_col].astype(str).str.replace(r'[^\d]', '', regex=True).replace('', '0').astype(int)
+                b_col = find_col(['bsr', 'rank', 'classifica', 'sales rank', 'sales'])
+                if b_col:
+                    mapped_df['BSR'] = pd.to_numeric(df_raw[b_col].astype(str).str.replace(r'[^\d]', '', regex=True).replace('', 'NaN'), errors='coerce')
+                else:
+                    mapped_df['BSR'] = np.nan
                 
-                # Mappatura Prezzo
                 p_col = find_col(['price', 'prezzo'])
-                if p_col: mapped_df['Prezzo'] = df_raw[p_col].astype(str).str.replace(r'[^\d.,]', '', regex=True).str.replace(',', '.').astype(float)
+                if p_col:
+                    mapped_df['Prezzo'] = pd.to_numeric(df_raw[p_col].astype(str).str.replace(r'[^\d.,]', '', regex=True).str.replace(',', '.'), errors='coerce')
+                else:
+                    mapped_df['Prezzo'] = np.nan
                 
-                # Mappatura Recensioni
-                r_col = find_col(['review count', 'ratings', 'recensioni', 'reviews'])
-                if r_col: mapped_df['Recensioni'] = df_raw[r_col].astype(str).str.replace(r'[^\d]', '', regex=True).replace('', '0').astype(int)
+                r_col = find_col(['review', 'rating', 'recensioni', 'voti'])
+                if r_col:
+                    mapped_df['Recensioni'] = pd.to_numeric(df_raw[r_col].astype(str).str.replace(r'[^\d]', '', regex=True).replace('', 'NaN'), errors='coerce')
+                else:
+                    mapped_df['Recensioni'] = np.nan
 
-                # Determinazione Editore (basata su colonna Brand/Author o Manufacturer)
-                e_col = find_col(['brand', 'manufacturer', 'author', 'editore', 'publisher'])
+                e_col = find_col(['brand', 'manufacturer', 'author', 'editore', 'publisher', 'marca'])
                 if e_col:
-                    mapped_df['Editore'] = df_raw[e_col].apply(lambda x: "Independent" if any(s in str(x).lower() for s in ['independently', 'kdp', 'indipendente']) else "Publishing House")
+                    mapped_df['Editore'] = df_raw[e_col].apply(lambda x: "Independent" if any(s in str(x).lower() for s in ['independently', 'kdp', 'indipendente', 'createspace']) else "Publishing House")
                 else:
                     mapped_df['Editore'] = "N/D"
 
                 st.session_state.raw_data = mapped_df
-                st.success("File elaborato correttamente!")
+                st.success("File elaborato in modo sicuro!")
             except Exception as e:
                 st.error(f"Errore nella lettura del file: {e}")
         else:
@@ -154,7 +156,6 @@ with st.sidebar:
 if st.session_state.raw_data is not None:
     df = st.session_state.raw_data
     
-    # Filtro Editore
     if st.session_state.pub_filter != "Tutti":
         df = df[df['Editore'] == st.session_state.pub_filter]
 
@@ -163,10 +164,15 @@ if st.session_state.raw_data is not None:
     with col_left:
         st.markdown(f"<div class='section-title'>Dati Mercato Importati ({st.session_state.selected_market})</div>", unsafe_allow_html=True)
         
+        # Calcolo Sicuro delle Metriche (Evita i KeyError e i NaN error)
         c1, c2, c3 = st.columns(3)
-        c1.metric("Libri nel DB", len(df))
-        c2.metric("Prezzo Medio", f"{df['Prezzo'].mean():.2f} €")
-        c3.metric("BSR Medio", f"{int(df['BSR'].mean())}")
+        c1.metric("Libri Rilevati", len(df))
+        
+        p_mean = df['Prezzo'].mean()
+        c2.metric("Prezzo Medio", f"{p_mean:.2f} €" if pd.notna(p_mean) else "N/D")
+        
+        b_mean = df['BSR'].mean()
+        c3.metric("BSR Medio", f"{int(b_mean)}" if pd.notna(b_mean) else "N/D")
         
         st.markdown("<br>", unsafe_allow_html=True)
         st.dataframe(df, use_container_width=True, height=600, hide_index=True)
@@ -182,7 +188,7 @@ if st.session_state.raw_data is not None:
             if not nicchia or not target:
                 st.error("Inserisci nicchia e target.")
             else:
-                with st.spinner("L'AI sta analizzando i dati importati..."):
+                with st.spinner("L'AI sta elaborando la strategia..."):
                     client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
                     prompt = f"""
                     Agisci come esperto KDP. Analisi nicchia: '{nicchia}'. Target: '{target}'. 
@@ -198,4 +204,4 @@ if st.session_state.raw_data is not None:
         
         st.markdown("</div>", unsafe_allow_html=True)
 else:
-    st.info("👈 Carica un file CSV esportato da un'estensione Amazon nella sidebar per iniziare l'analisi.")
+    st.info("👈 Carica un file CSV esportato da Amazon nella barra laterale sinistra.")
