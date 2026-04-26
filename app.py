@@ -137,7 +137,7 @@ fallback_keywords = {
 }
 
 # ==============================================================================
-# 3. MOTORE DI SCRAPING (INDIE HUNTER MODE)
+# 3. MOTORE DI SCRAPING (INDIE HUNTER MODE CORRETTO)
 # ==============================================================================
 def get_amazon_data(domain, keyword, publisher_filter):
     ANT_KEY = "5a93911a587c4aff8d8dc7f2af9ea0db"
@@ -145,11 +145,8 @@ def get_amazon_data(domain, keyword, publisher_filter):
     WEBSCRAPINGAI_KEY = st.secrets.get("WEBSCRAPINGAI_KEY", "")
     
     def fetch_with_triple_fallback(p):
-        base_url = f"https://www.{domain}/s?k={keyword.replace(' ', '+')}&i=stripbooks&page={p}"
-        if publisher_filter == "Independent":
-            amazon_url = base_url + "&rh=p_30%3AIndependently+published"
-        else:
-            amazon_url = base_url
+        # FIX: Rimosso l'hack "&rh=" perché rompeva le ricerche internazionali causando 0 risultati
+        amazon_url = f"https://www.{domain}/s?k={keyword.replace(' ', '+')}&i=stripbooks&page={p}"
 
         try:
             r = requests.get(f"https://api.scrapingant.com/v2/general?url={urllib.parse.quote(amazon_url)}&x-api-key={ANT_KEY}&browser=true&proxy_type=residential", timeout=35)
@@ -181,8 +178,9 @@ def get_amazon_data(domain, keyword, publisher_filter):
             
             text_full = item.get_text(separator=' ').lower()
             
+            # FIX LOGICO: Ricerca accurata per trovare veri Independent su tutti i domini
             is_self = "Publishing House"
-            if publisher_filter == "Independent" or any(x in text_full for x in ['independently', 'kdp', 'indipendente', 'createspace', 'unabhängig']):
+            if any(x in text_full for x in ['independently', 'kdp', 'indipendente', 'createspace', 'unabhängig', 'independiente', 'indépendant']):
                 is_self = "Independent"
 
             if publisher_filter != "All Publishers" and is_self != publisher_filter:
@@ -236,11 +234,9 @@ with st.sidebar:
     cat_list = categories_map.get(domain, ["All Departments"])
     cat_choice = st.selectbox("Categoria", cat_list)
     
-    # --- NUOVO: SELETTORE SOTTO-CATEGORIA DINAMICO ---
     domain_subcats = subcategories_map.get(domain, {})
-    subcat_list = domain_subcats.get(cat_choice, ["Generale"]) # Fallback se la categoria non ha sotto-categorie mappate
+    subcat_list = domain_subcats.get(cat_choice, ["Generale"]) 
     subcat_choice = st.selectbox("Sotto-Categoria", subcat_list)
-    # -------------------------------------------------
 
     pub_choice = st.selectbox("Publisher Type *", ["All Publishers", "Publishing House", "Independent"])
     
@@ -249,25 +245,23 @@ with st.sidebar:
     if st.button("🔍 Estrai Dati Sotto-Categoria", type="primary"):
         with st.spinner(f"Scraping avanzato su {domain}... (Potrebbe richiedere fino a 30 sec)"):
             
-            # --- NUOVA LOGICA DI RICERCA ---
-            # Usa la sotto-categoria per la ricerca, a meno che non sia "Generale"
             if subcat_choice != "Generale":
                 search_query = subcat_choice
             else:
                 search_query = fallback_keywords.get(domain, "books") if cat_choice in ["Tutte le categorie", "All Departments", "Alle Kategorien", "Toutes nos boutiques", "Todos los departamentos"] else cat_choice
-            # -------------------------------
 
             df = get_amazon_data(domain, search_query, pub_choice)
             
             if not df.empty:
                 st.session_state.raw_data = df
                 st.session_state.search_category = cat_choice
-                st.session_state.search_subcategory = subcat_choice # Salviamo la sotto-categoria
+                st.session_state.search_subcategory = subcat_choice 
                 st.session_state.pub_filter = pub_choice 
                 st.session_state.suggestions = None 
             else:
+                # FIX: Messaggio di errore aggiornato per riflettere la realtà dei dati trovati
                 if pub_choice == "Independent":
-                    st.error("Nessun libro Independent trovato. Amazon potrebbe aver nascosto la categoria o i nodi URL sono cambiati.")
+                    st.error("Nessun libro Independent trovato nelle prime 20 pagine per questa query. Prova una categoria diversa o seleziona 'All Publishers'.")
                 else:
                     st.error("Nessun dato trovato. Riprova.")
                     
@@ -289,7 +283,6 @@ else:
     with col_data:
         filter_text = f" ({st.session_state.pub_filter})" if st.session_state.pub_filter != "All Publishers" else ""
         
-        # Mostra sia la Categoria che la Sotto-categoria nel titolo
         subcat_display = f" > {st.session_state.search_subcategory}" if st.session_state.search_subcategory != "Generale" else ""
         st.markdown(f"<div class='section-title'>Dati Estratti: <span style='color: #2563eb;'>{st.session_state.search_category}{subcat_display}</span>{filter_text}</div>", unsafe_allow_html=True)
         
@@ -331,7 +324,6 @@ else:
                 with st.spinner("L'AI sta generando le idee..."):
                     client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
                     
-                    # L'AI ORA RAGIONA ANCHE SULLA SOTTO-CATEGORIA PER MAGGIORE PRECISIONE
                     prompt_book = f"""
                     Agisci come un Publisher di successo su Amazon {st.session_state.selected_market}. 
                     Categoria: '{st.session_state.search_category}'. Sotto-Categoria esplorata: '{st.session_state.search_subcategory}'. 
