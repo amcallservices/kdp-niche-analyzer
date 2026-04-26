@@ -7,7 +7,7 @@ import numpy as np
 # ==============================================================================
 # 1. DESIGN SYSTEM
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 13.4", page_icon="📈", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 13.5", page_icon="📈", layout="wide")
 
 st.markdown("""
     <style>
@@ -29,14 +29,14 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='program-title'>KDP Market Intelligence Hub v13.4</div>", unsafe_allow_html=True)
+st.markdown("<div class='program-title'>KDP Market Intelligence Hub v13.5</div>", unsafe_allow_html=True)
 
 # --- STATO ---
 for key in ['raw_data', 'suggestions', 'selected_market', 'pub_filter', 'raw_cols']:
     if key not in st.session_state: st.session_state[key] = None
 
 # ==============================================================================
-# 2. SIDEBAR (LOGICA DI MAPPATURA OMNI-CHANNEL)
+# 2. SIDEBAR (NUMERAZIONE AUTOMATICA + OMNI-MAPPER)
 # ==============================================================================
 with st.sidebar:
     st.markdown("<p style='font-weight:700; color:#9ca3af; font-size:0.8rem;'>STEP 1: IMPORTA DATI</p>", unsafe_allow_html=True)
@@ -50,7 +50,6 @@ with st.sidebar:
     if st.button("📊 Elabora Dati", type="primary"):
         if uploaded_file:
             try:
-                # Auto-detect separatore e encoding
                 try:
                     df_raw = pd.read_csv(uploaded_file, sep=None, engine='python', encoding='utf-8')
                 except:
@@ -58,7 +57,7 @@ with st.sidebar:
                     df_raw = pd.read_csv(uploaded_file, sep=None, engine='python', encoding='latin-1')
 
                 cols = df_raw.columns.tolist()
-                st.session_state.raw_cols = cols # Per il debug
+                st.session_state.raw_cols = cols 
                 
                 def find_col(keywords):
                     for k in keywords:
@@ -72,9 +71,8 @@ with st.sidebar:
                 img_col = find_col(['image', 'img', 'thumbnail', 'photo', 'url', 'src', 'copertina', 'a-dynamic-image'])
                 mapped_df['Copertina'] = df_raw[img_col] if img_col else None
                 
-                # 2. Titolo (Mapping Estremo per classi Amazon)
-                t_col = find_col(['title', 'titolo', 'name', 'nome', 'product', 'text', 'a-size-medium', 'a-link-normal', 's-line-clamp'])
-                mapped_df['Titolo'] = df_raw[t_col] if t_col else "N/D"
+                # 2. TITOLO: AL POSTO DEL TESTO, USIAMO I NUMERI
+                mapped_df['N. Libro'] = range(1, len(df_raw) + 1)
                 
                 # 3. BSR
                 b_col = find_col(['bsr', 'rank', 'classifica', 'sales', 'posizione', 'ranking', 'best sellers'])
@@ -90,7 +88,7 @@ with st.sidebar:
                 else:
                     mapped_df['Prezzo'] = np.nan
                 
-                # 5. Recensioni (Mapping Estremo)
+                # 5. Recensioni
                 r_col = find_col(['review count', 'ratings', 'recensioni', 'voti', 'reviews', 's-underline-text', 'a-size-base', 'rating-count'])
                 if r_col:
                     mapped_df['Recensioni'] = pd.to_numeric(df_raw[r_col].astype(str).str.replace(r'[^\d]', '', regex=True), errors='coerce')
@@ -111,7 +109,7 @@ with st.sidebar:
             st.warning("Carica un file prima.")
 
     if st.session_state.raw_cols:
-        with st.expander("🛠️ Debug Colonne Rilevate"):
+        with st.expander("🛠️ Debug Colonne CSV"):
             st.write(st.session_state.raw_cols)
 
     if st.button("🔄 Reset"):
@@ -134,7 +132,7 @@ if st.session_state.raw_data is not None:
         st.markdown(f"<div class='section-title'>Dati Mercato ({st.session_state.selected_market})</div>", unsafe_allow_html=True)
         
         c1, c2, c3 = st.columns(3)
-        c1.metric("Risultati", len(df))
+        c1.metric("Libri Analizzati", len(df))
         p_mean = df['Prezzo'].mean()
         c2.metric("Prezzo Medio", f"{p_mean:.2f} €" if pd.notna(p_mean) else "N/D")
         b_mean = df['BSR'].mean()
@@ -149,6 +147,7 @@ if st.session_state.raw_data is not None:
             hide_index=True,
             column_config={
                 "Copertina": st.column_config.ImageColumn("Copertina"),
+                "N. Libro": st.column_config.NumberColumn("ID Libro", help="Numero sequenziale al posto del titolo"),
                 "Prezzo": st.column_config.NumberColumn("Prezzo", format="%.2f €"),
                 "BSR": st.column_config.NumberColumn("BSR", format="%d"),
                 "Recensioni": st.column_config.NumberColumn("Recensioni", format="%d")
@@ -165,7 +164,7 @@ if st.session_state.raw_data is not None:
             if nicchia and target:
                 with st.spinner("Analisi in corso..."):
                     client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                    prompt = f"Analizza la nicchia '{nicchia}' per il target '{target}' sul mercato {st.session_state.selected_market}. Fornisci 3 titoli KDP, sottotitoli SEO e una trama breve basandoti sui dati di mercato."
+                    prompt = f"Analizza la nicchia '{nicchia}' per il target '{target}' sul mercato {st.session_state.selected_market}. Fornisci 3 titoli KDP, sottotitoli SEO e una trama breve."
                     response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}])
                     st.session_state.suggestions = response.choices[0].message.content
             else:
@@ -176,4 +175,4 @@ if st.session_state.raw_data is not None:
             st.markdown(st.session_state.suggestions)
         st.markdown("</div>", unsafe_allow_html=True)
 else:
-    st.info("👈 Carica il tuo file CSV nella sidebar per visualizzare l'analisi.")
+    st.info("👈 Carica il tuo file CSV nella sidebar per visualizzare l'analisi numerica.")
