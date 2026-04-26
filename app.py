@@ -7,7 +7,7 @@ import numpy as np
 # ==============================================================================
 # 1. DESIGN SYSTEM
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 16.7", page_icon="💰", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 17.0", page_icon="💰", layout="wide")
 
 st.markdown("""
     <style>
@@ -30,7 +30,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='program-title'>KDP Intelligence Hub v16.9 💰</div>", unsafe_allow_html=True)
+st.markdown("<div class='program-title'>KDP Intelligence Hub v17.0 💰</div>", unsafe_allow_html=True)
 
 if 'raw_data' not in st.session_state: st.session_state.raw_data = None
 if 'ai_output' not in st.session_state: st.session_state.ai_output = None
@@ -56,14 +56,14 @@ with st.sidebar:
                 cols = df_raw.columns.tolist()
                 temp = pd.DataFrame(index=df_raw.index)
                 
-                # INIZIALIZZAZIONE FORZATA DELLE COLONNE (Previene il KeyError)
+                # INIZIALIZZAZIONE FORZATA DELLE COLONNE
                 target_cols = ["Copertina", "Titolo", "BSR", "Prezzo", "Autore", "Recensioni"]
                 for c in target_cols:
                     temp[c] = np.nan
 
                 bsrs, authors = [], []
                 for _, row in df_raw.iterrows():
-                    # Radar BSR Reale (Sempre il numero più alto trovato nella riga)
+                    # Radar BSR Reale
                     ranks = []
                     for v in row.dropna():
                         v_s = str(v)
@@ -90,7 +90,6 @@ with st.sidebar:
                 temp['BSR'] = bsrs
                 temp['Autore'] = authors
                 
-                # Mapping Avanzato Colonne
                 img_c = next((c for c in cols if any(k in c.lower() for k in ['s-image src', 'image', 'copertina', 'src', 'dynamic-image'])), None)
                 if img_c: temp['Copertina'] = df_raw[img_c]
 
@@ -119,7 +118,7 @@ with st.sidebar:
         st.rerun()
 
 # ==============================================================================
-# 3. PROFITABILITY ANALYSIS
+# 3. PROFITABILITY ANALYSIS (FIX SYNTAX ERROR)
 # ==============================================================================
 if st.session_state.raw_data is not None:
     df = st.session_state.raw_data.copy()
@@ -148,15 +147,13 @@ if st.session_state.raw_data is not None:
     st.markdown("---")
 
     # ==============================================================================
-    # 4. TABELLA DATI COMPLETA
+    # 4. TABELLA DATI & AI STRATEGY LAB
     # ==============================================================================
     col_table, col_ai = st.columns([7, 3])
     
     with col_table:
         st.markdown("<p style='font-weight:bold; font-size:1.2rem;'>Dati Estratti (BSR Globale Corretto)</p>", unsafe_allow_html=True)
-        
         cols_to_show = ["Copertina", "ID", "Titolo", "BSR", "Prezzo", "Autore", "Recensioni"]
-        
         st.dataframe(
             df[cols_to_show], 
             use_container_width=True, 
@@ -177,10 +174,10 @@ if st.session_state.raw_data is not None:
         
         if st.button("🪄 GENERA STRATEGIA"):
             if nicchia_target:
-                with st.spinner("L'AI sta analizzando i dati e i titoli concorrenti..."):
+                with st.spinner("L'AI sta analizzando i titoli dei competitor..."):
                     client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
                     
-                    # Estraiamo i titoli dei top competitors per dare contesto all'AI
+                    # Estraiamo i titoli reali dalla tabella per darli in pasto all'AI
                     competitor_titles = "\n".join(df['Titolo'].head(10).astype(str).tolist())
                     
                     prompt = f"""
@@ -189,13 +186,13 @@ if st.session_state.raw_data is not None:
                     BSR Medio rilevato: {int(avg_bsr)}
                     Prezzo Medio: {avg_price:.2f}€
                     
-                    Ecco i titoli dei principali concorrenti:
+                    Ecco i titoli reali dei principali concorrenti in questa categoria:
                     {competitor_titles}
                     
-                    BASANDOTI SUI DATI SOPRA:
-                    1. Suggerisci 5 potenziali titoli magnetici che possano battere la concorrenza.
-                    2. Suggerisci 5 sottotitoli SEO con parole chiave ad alto volume.
-                    3. Spiega brevemente la strategia (perché questi titoli dovrebbero funzionare meglio).
+                    BASANDOTI SUI TITOLI SOPRA, genera una strategia vincente:
+                    1. Suggerisci 5 potenziali titoli magnetici (titolo principale) che possano superare questi concorrenti.
+                    2. Suggerisci 5 sottotitoli SEO con parole chiave ad alto volume per questa nicchia.
+                    3. Spiega brevemente perché questi nuovi titoli dovrebbero funzionare meglio rispetto a quelli esistenti.
                     """
                     
                     response = client.chat.completions.create(
@@ -204,7 +201,7 @@ if st.session_state.raw_data is not None:
                     )
                     st.session_state.ai_output = response.choices[0].message.content
             else:
-                st.warning("Inserisci il nome della nicchia.")
+                st.warning("Inserisci il nome della nicchia per procedere.")
 
         if st.session_state.ai_output:
             st.markdown("---")
