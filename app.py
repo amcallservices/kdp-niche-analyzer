@@ -7,7 +7,7 @@ import numpy as np
 # ==============================================================================
 # 1. DESIGN SYSTEM - TOTAL DARK MODE
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 15.9", page_icon="🌙", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 16.0", page_icon="🌙", layout="wide")
 
 st.markdown("""
     <style>
@@ -27,13 +27,13 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='program-title'>KDP Market Intelligence Hub v15.9 🌙</div>", unsafe_allow_html=True)
+st.markdown("<div class='program-title'>KDP Market Intelligence Hub v16.0 🌙</div>", unsafe_allow_html=True)
 
 if 'raw_data' not in st.session_state: st.session_state.raw_data = None
 if 'suggestions' not in st.session_state: st.session_state.suggestions = None
 
 # ==============================================================================
-# 2. SIDEBAR - ELABORAZIONE E LOGICA AUTORE
+# 2. SIDEBAR - ELABORAZIONE ROBUSTA
 # ==============================================================================
 with st.sidebar:
     st.markdown("<p style='font-weight:700; color:#58a6ff;'>📥 CARICAMENTO DATI</p>", unsafe_allow_html=True)
@@ -43,9 +43,9 @@ with st.sidebar:
     domain_map = {"IT": "amazon.it", "US": "amazon.com", "UK": "amazon.co.uk", "DE": "amazon.de", "FR": "amazon.fr", "ES": "amazon.es"}
     base_url = f"https://www.{domain_map[mkt]}"
 
-    files = st.file_uploader("Trascina fino a 100 CSV", type=["csv"], accept_multiple_files=True)
+    files = st.file_uploader("Trascina i tuoi CSV qui", type=["csv"], accept_multiple_files=True)
 
-    if st.button("📊 ELABORA E COMBINA", type="primary"):
+    if st.button("📊 ANALIZZA TUTTO", type="primary"):
         if files:
             all_dfs = []
             for f in files:
@@ -62,13 +62,15 @@ with st.sidebar:
                             if k.lower() in str(c).lower().strip(): return c
                     return None
 
+                # INIZIALIZZAZIONE PREVENTIVA (Evita il KeyError)
                 temp = pd.DataFrame(index=df_raw.index)
-                
-                # --- Copertina ---
+                for c_name in ['Copertina', 'Titolo', 'BSR', 'Prezzo', 'Recensioni', 'Nome Autore', 'Categoria Editore']:
+                    temp[c_name] = np.nan
+
+                # --- MAPPING ---
                 img_c = find_col(['s-image src', 'a-dynamic-image src', 'image', 'copertina', 'src'])
-                temp['Copertina'] = df_raw[img_c] if img_c else None
+                if img_c: temp['Copertina'] = df_raw[img_c]
                 
-                # --- Titolo ---
                 t_c = find_col(['a-size-medium', 'title', 'titolo', 'name', '_cdezb_p13n-sc-css-line-clamp-1_1fn1y'])
                 raw_t = df_raw[t_c].fillna("N/D").astype(str) if t_c else pd.Series(["N/D"]*len(df_raw))
                 link_c = find_col(['a-link-normal href', 'href', 'url', 'link'])
@@ -78,8 +80,7 @@ with st.sidebar:
                     return v if 'http' in v else f"{base_url}{v}"
                 temp['Titolo'] = [f"[{str(t).replace('[','').replace(']','')}]({fix_url(i)})" if fix_url(i) else str(t) for i, t in enumerate(raw_t)]
                 
-                # --- BSR ---
-                b_c = find_col(['zg-bdg-text', 'extension-rank', 'rank', 'bsr', 'classifica'])
+                b_c = find_col(['zg-bdg-text', 'extension-rank', 'rank', 'bsr'])
                 if not b_c:
                     for c in df_raw.columns:
                         if df_raw[c].astype(str).str.contains('#').any(): b_c = c; break
@@ -88,39 +89,31 @@ with st.sidebar:
                         m = re.search(r'#?(\d{1,3}(?:[.,]\d{3})*|\d+)', str(v))
                         return int(m.group(1).replace('.','').replace(',','')) if m else np.nan
                     temp['BSR'] = df_raw[b_c].apply(cl_bsr)
-                else: temp['BSR'] = np.nan
                 
-                # --- Prezzo ---
                 p_c = find_col(['a-offscreen', 'price', 'prezzo', 'a-price-whole', 'p13n-sc-price'])
                 if p_c: temp['Prezzo'] = pd.to_numeric(df_raw[p_c].astype(str).str.replace(r'[^\d.,]', '', regex=True).str.replace(',', '.'), errors='coerce')
                 
-                # --- Recensioni ---
-                r_c = find_col(['a-size-mini', 'a-size-small', 'a-size-base', 'voti', 'review', 'rating'])
+                r_c = find_col(['a-size-mini', 'a-size-small', 'a-size-base', 'voti', 'review'])
                 if r_c:
                     def cl_r(v):
                         n = re.findall(r'\b\d+\b', str(v).replace('.','').replace(',',''))
                         return int(max(n, key=int)) if n else np.nan
                     temp['Recensioni'] = df_raw[r_c].apply(cl_r)
                 
-                # --- AUTORE / EDITORE (FIX DEFINITIVO) ---
-                # Cerchiamo in tutte le colonne possibili che Instant Data Scraper o Helium 10 usano per l'autore
-                e_c = find_col(['a-size-base 2', 'a-color-secondary', 'author', 'editore', 'a-size-base', 'byline', 'brand'])
+                # --- AUTORE FIX ---
+                e_c = find_col(['a-size-base 2', 'a-color-secondary', 'author', 'editore', 'byline', 'brand'])
                 if e_c:
                     def get_author(v):
                         t = str(v).strip()
-                        if pd.isna(v) or t.lower() in ['nan', 'none', '']: return "N/D"
-                        # Pulizia dai prefissi comuni di Amazon
-                        t_clean = re.sub(r'^(di|by|Author:)\s+', '', t, flags=re.IGNORECASE)
-                        return t_clean
-                    
+                        if t.lower() in ['nan', 'none', '']: return "N/D"
+                        return re.sub(r'^(di|by|Author:)\s+', '', t, flags=re.IGNORECASE)
                     temp['Nome Autore'] = df_raw[e_c].apply(get_author)
                     
                     def check_i(v):
                         t = str(v).lower()
-                        return "Independent" if any(s in t for s in ['independently', 'kdp', 'indipendente', 'createspace']) else "Publishing House"
+                        return "Independent" if any(s in t for s in ['independently', 'kdp', 'indipendente']) else "Publishing House"
                     temp['Categoria Editore'] = df_raw[e_c].apply(check_i)
                 else:
-                    temp['Nome Autore'] = "N/D"
                     temp['Categoria Editore'] = "Publishing House"
 
                 all_dfs.append(temp)
@@ -140,7 +133,7 @@ with st.sidebar:
         st.rerun()
 
 # ==============================================================================
-# 3. DASHBOARD E AI STRATEGY LAB
+# 3. DASHBOARD
 # ==============================================================================
 if st.session_state.raw_data is not None:
     df_f = st.session_state.raw_data.copy()
@@ -156,13 +149,16 @@ if st.session_state.raw_data is not None:
         m2.metric("Prezzo Avg", f"{df_f['Prezzo'].mean():.2f} €" if pd.notna(df_f['Prezzo'].mean()) else "N/D")
         m3.metric("BSR Avg", f"{int(df_f['BSR'].mean()):,}".replace(',', '.') if pd.notna(df_f['BSR'].mean()) else "N/D")
         
+        # VALVOLA DI SICUREZZA PER LE COLONNE
+        desired = ["Copertina", "N. Libro", "BSR", "Titolo", "Prezzo", "Recensioni", "Nome Autore"]
+        actual = [c for c in desired if c in df_f.columns]
+        
         st.dataframe(
-            df_f[["Copertina", "N. Libro", "BSR", "Titolo", "Prezzo", "Recensioni", "Nome Autore"]], 
-            use_container_width=True, height=800, hide_index=True,
+            df_f[actual], use_container_width=True, height=800, hide_index=True,
             column_config={
                 "Copertina": st.column_config.ImageColumn("Cover"),
                 "Prezzo": st.column_config.NumberColumn("Prezzo (€)", format="%.2f"),
-                "Titolo": st.column_config.TextColumn("Titolo (Cliccabile)", width="large")
+                "Titolo": st.column_config.TextColumn("Titolo (Link)", width="large")
             }
         )
 
@@ -176,8 +172,7 @@ if st.session_state.raw_data is not None:
             if nicchia and target:
                 with st.spinner("L'AI sta analizzando i dati..."):
                     client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                    tipo_p = st.session_state.get('pub_filter', 'Tutti')
-                    prompt = f"Expert KDP analyzer. Nicchia: {nicchia}, Target: {target}. Filtro: {tipo_p}. Genera 3 titoli, sottotitoli e strategia trama."
+                    prompt = f"Expert KDP analyzer. Nicchia: {nicchia}, Target: {target}. Genera 3 titoli e trama."
                     res = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}])
                     st.session_state.suggestions = res.choices[0].message.content
         
