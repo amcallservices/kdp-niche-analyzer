@@ -7,7 +7,7 @@ import numpy as np
 # ==============================================================================
 # 1. DESIGN SYSTEM
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 15.0", page_icon="📈", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 15.1", page_icon="📈", layout="wide")
 
 st.markdown("""
     <style>
@@ -29,14 +29,14 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='program-title'>KDP Market Intelligence Hub v15.0 (Multi-File)</div>", unsafe_allow_html=True)
+st.markdown("<div class='program-title'>KDP Market Intelligence Hub v15.1 (Smart Filter)</div>", unsafe_allow_html=True)
 
 # --- STATO ---
-for key in ['raw_data', 'suggestions', 'selected_market', 'pub_filter', 'raw_cols']:
+for key in ['raw_data', 'suggestions', 'selected_market', 'raw_cols']:
     if key not in st.session_state: st.session_state[key] = None
 
 # ==============================================================================
-# 2. SIDEBAR (LOGICA MULTI-FILE)
+# 2. SIDEBAR E LOGICA DI IMPORT MULTI-FILE
 # ==============================================================================
 with st.sidebar:
     st.markdown("<p style='font-weight:700; color:#9ca3af; font-size:0.8rem;'>STEP 1: IMPORTA DATI</p>", unsafe_allow_html=True)
@@ -46,11 +46,7 @@ with st.sidebar:
     domain_map = {"IT": "amazon.it", "US": "amazon.com", "UK": "amazon.co.uk", "DE": "amazon.de", "FR": "amazon.fr", "ES": "amazon.es"}
     base_url = f"https://www.{domain_map[mkt_choice]}"
 
-    # FIX MULTI-FILE: accept_multiple_files=True permette fino a 100+ file contemporaneamente
     uploaded_files = st.file_uploader("Carica CSV di Amazon (Puoi selezionarne a decine!)", type=["csv"], accept_multiple_files=True)
-    
-    # Filtro testuale libero
-    search_author = st.text_input("Filtra per Autore/Editore (es. Independent)", "")
 
     if st.button("📊 Elabora Tutti i Dati", type="primary"):
         if uploaded_files:
@@ -58,7 +54,6 @@ with st.sidebar:
                 all_mapped_dfs = []
                 all_cols_debug = []
                 
-                # Loop che unisce tutti i file caricati
                 for uploaded_file in uploaded_files:
                     try:
                         df_raw = pd.read_csv(uploaded_file, sep=None, engine='python', encoding='utf-8', on_bad_lines='skip')
@@ -138,39 +133,44 @@ with st.sidebar:
                     else:
                         mapped_df['Recensioni'] = np.nan
 
-                    # --- F: EDITORE E AUTORE (Ora mostra i Nomi Veri!) ---
+                    # --- F: EDITORE E AUTORE ---
                     e_col = find_col(['a-size-base 2', 'a-color-secondary', 'brand', 'manufacturer', 'author', 'editore', 'publisher'])
                     if e_col:
                         def analizza_editore(val):
                             testo = str(val).replace('by ', '').replace('di ', '').strip()
                             if pd.isna(val) or testo.lower() == 'nan' or testo == '': return "N/D"
-                            
-                            # Se è palesemente indipendente, lo etichetta
                             if any(s in testo.lower() for s in ['independently', 'kdp', 'indipendente', 'createspace']):
                                 return "Independent"
-                            
-                            # Altrimenti restituisce il nome vero (es. "Mario Rossi" o "Mondadori")
                             return testo
-                            
                         mapped_df['Editore / Autore'] = df_raw[e_col].apply(analizza_editore)
                     else:
                         mapped_df['Editore / Autore'] = "N/D"
 
                     all_mapped_dfs.append(mapped_df)
                 
-                # UNIFICA TUTTI I FILE IN UN UNICO DATAFRAME
                 final_df = pd.concat(all_mapped_dfs, ignore_index=True)
-                
-                # CREA UN NUOVO ID SEQUENZIALE PER TUTTI I LIBRI COMBINATI
                 final_df.insert(1, 'N. Libro', range(1, len(final_df) + 1))
                 
                 st.session_state.raw_data = final_df
-                st.session_state.raw_cols = list(set(all_cols_debug)) # Rimuove duplicati per il pannello diagnostico
+                st.session_state.raw_cols = list(set(all_cols_debug))
                 st.success(f"Dati estratti e uniti con successo da {len(uploaded_files)} file CSV!")
             except Exception as e:
                 st.error(f"Errore durante l'elaborazione dei file: {e}")
         else:
             st.warning("Carica almeno un file prima di elaborare.")
+
+    # --- NUOVO FILTRO A TENDINA (Appare solo dopo aver elaborato i dati) ---
+    if st.session_state.raw_data is not None:
+        st.markdown("---")
+        st.markdown("<p style='font-weight:700; color:#9ca3af; font-size:0.8rem;'>STEP 2: FILTRA DATI</p>", unsafe_allow_html=True)
+        
+        # Estrai la lista unica di tutti gli autori trovati, in ordine alfabetico
+        autori_unici = sorted([str(x) for x in st.session_state.raw_data['Editore / Autore'].dropna().unique()])
+        lista_opzioni = ["Tutti"] + autori_unici
+        
+        search_author = st.selectbox("Seleziona Autore / Editore", lista_opzioni)
+    else:
+        search_author = "Tutti"
 
     if st.session_state.raw_cols:
         with st.expander("🔍 Mapping Helper (Diagnostica CSV)"):
@@ -188,9 +188,9 @@ with st.sidebar:
 if st.session_state.raw_data is not None:
     df = st.session_state.raw_data
     
-    # Applica Filtro Autore/Editore se l'utente ha scritto qualcosa
-    if search_author:
-        df = df[df['Editore / Autore'].str.contains(search_author, case=False, na=False)]
+    # Applica Filtro Autore/Editore a tendina
+    if search_author != "Tutti":
+        df = df[df['Editore / Autore'] == search_author]
 
     col_left, col_right = st.columns([7, 3], gap="large")
 
@@ -198,7 +198,7 @@ if st.session_state.raw_data is not None:
         st.markdown(f"<div class='section-title'>Mercato: {st.session_state.selected_market}</div>", unsafe_allow_html=True)
         
         c1, c2, c3 = st.columns(3)
-        c1.metric("Libri Rilevati (Totale)", len(df))
+        c1.metric("Libri Mostrati", len(df))
         prezzo_medio = df['Prezzo'].mean()
         c2.metric("Prezzo Avg", f"{prezzo_medio:.2f} €" if pd.notna(prezzo_medio) else "N/D")
         bsr_medio = df['BSR'].mean()
@@ -234,7 +234,7 @@ if st.session_state.raw_data is not None:
         
         if st.button("🪄 Genera Idee KDP", type="primary"):
             if nicchia and target:
-                with st.spinner("L'AI sta studiando la montagna di dati e generando la strategia..."):
+                with st.spinner("L'AI sta studiando i dati filtrati e generando la strategia..."):
                     client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
                     prompt = f"Basandoti sui dati combinati del mercato KDP {st.session_state.selected_market}, analizza la nicchia '{nicchia}' per il target '{target}'. Suggerisci 3 titoli magnetici, sottotitoli SEO e una trama persuasiva ispirata alle best practices del mercato."
                     response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}])
