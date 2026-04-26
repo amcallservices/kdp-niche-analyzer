@@ -7,7 +7,7 @@ import numpy as np
 # ==============================================================================
 # 1. DESIGN SYSTEM
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 13.3", page_icon="📈", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 13.4", page_icon="📈", layout="wide")
 
 st.markdown("""
     <style>
@@ -29,14 +29,14 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='program-title'>KDP Market Intelligence Hub v13.3</div>", unsafe_allow_html=True)
+st.markdown("<div class='program-title'>KDP Market Intelligence Hub v13.4</div>", unsafe_allow_html=True)
 
 # --- STATO ---
-for key in ['raw_data', 'suggestions', 'selected_market', 'pub_filter']:
+for key in ['raw_data', 'suggestions', 'selected_market', 'pub_filter', 'raw_cols']:
     if key not in st.session_state: st.session_state[key] = None
 
 # ==============================================================================
-# 2. SIDEBAR (LOGICA DI MAPPATURA POTENZIATA)
+# 2. SIDEBAR (LOGICA DI MAPPATURA OMNI-CHANNEL)
 # ==============================================================================
 with st.sidebar:
     st.markdown("<p style='font-weight:700; color:#9ca3af; font-size:0.8rem;'>STEP 1: IMPORTA DATI</p>", unsafe_allow_html=True)
@@ -50,7 +50,7 @@ with st.sidebar:
     if st.button("📊 Elabora Dati", type="primary"):
         if uploaded_file:
             try:
-                # Caricamento con auto-rilevamento separatore
+                # Auto-detect separatore e encoding
                 try:
                     df_raw = pd.read_csv(uploaded_file, sep=None, engine='python', encoding='utf-8')
                 except:
@@ -58,8 +58,8 @@ with st.sidebar:
                     df_raw = pd.read_csv(uploaded_file, sep=None, engine='python', encoding='latin-1')
 
                 cols = df_raw.columns.tolist()
+                st.session_state.raw_cols = cols # Per il debug
                 
-                # Funzione di ricerca colonne iper-flessibile
                 def find_col(keywords):
                     for k in keywords:
                         for c in cols:
@@ -68,56 +68,60 @@ with st.sidebar:
 
                 mapped_df = pd.DataFrame()
                 
-                # 1. Copertina (Nuovo!)
-                img_col = find_col(['image', 'img', 'thumbnail', 'photo', 'url', 'src', 'copertina'])
+                # 1. Copertina
+                img_col = find_col(['image', 'img', 'thumbnail', 'photo', 'url', 'src', 'copertina', 'a-dynamic-image'])
                 mapped_df['Copertina'] = df_raw[img_col] if img_col else None
                 
-                # 2. Titolo (Espanso)
-                t_col = find_col(['title', 'titolo', 'name', 'nome', 'product name', 'text', 'asin'])
+                # 2. Titolo (Mapping Estremo per classi Amazon)
+                t_col = find_col(['title', 'titolo', 'name', 'nome', 'product', 'text', 'a-size-medium', 'a-link-normal', 's-line-clamp'])
                 mapped_df['Titolo'] = df_raw[t_col] if t_col else "N/D"
                 
-                # 3. BSR (Espanso)
-                b_col = find_col(['bsr', 'rank', 'classifica', 'sales', 'posizione', 'ranking'])
+                # 3. BSR
+                b_col = find_col(['bsr', 'rank', 'classifica', 'sales', 'posizione', 'ranking', 'best sellers'])
                 if b_col:
                     mapped_df['BSR'] = pd.to_numeric(df_raw[b_col].astype(str).str.replace(r'[^\d]', '', regex=True), errors='coerce')
                 else:
                     mapped_df['BSR'] = np.nan
                 
-                # 4. Prezzo (Espanso)
-                p_col = find_col(['price', 'prezzo', 'list price', 'buy price', 'costo'])
+                # 4. Prezzo
+                p_col = find_col(['price', 'prezzo', 'list price', 'buy price', 'costo', 'a-offscreen', 'a-price'])
                 if p_col:
                     mapped_df['Prezzo'] = pd.to_numeric(df_raw[p_col].astype(str).str.replace(r'[^\d.,]', '', regex=True).str.replace(',', '.'), errors='coerce')
                 else:
                     mapped_df['Prezzo'] = np.nan
                 
-                # 5. Recensioni (Espanso)
-                r_col = find_col(['review count', 'ratings', 'recensioni', 'voti', 'reviews', 'count', 'stars'])
+                # 5. Recensioni (Mapping Estremo)
+                r_col = find_col(['review count', 'ratings', 'recensioni', 'voti', 'reviews', 's-underline-text', 'a-size-base', 'rating-count'])
                 if r_col:
                     mapped_df['Recensioni'] = pd.to_numeric(df_raw[r_col].astype(str).str.replace(r'[^\d]', '', regex=True), errors='coerce')
                 else:
                     mapped_df['Recensioni'] = np.nan
 
                 # 6. Editore
-                e_col = find_col(['brand', 'manufacturer', 'author', 'editore', 'publisher', 'marca', 'vendor', 'pubblicato'])
+                e_col = find_col(['brand', 'manufacturer', 'author', 'editore', 'publisher', 'marca', 'vendor', 'byline', 'a-color-secondary'])
                 if e_col:
                     mapped_df['Editore'] = df_raw[e_col].apply(lambda x: "Independent" if any(s in str(x).lower() for s in ['independently', 'kdp', 'indipendente', 'createspace', 'self']) else "Publishing House")
                 else:
                     mapped_df['Editore'] = "N/D"
 
                 st.session_state.raw_data = mapped_df
-                st.success(f"Analizzati {len(mapped_df)} libri con successo!")
             except Exception as e:
                 st.error(f"Errore: {e}")
         else:
             st.warning("Carica un file prima.")
 
+    if st.session_state.raw_cols:
+        with st.expander("🛠️ Debug Colonne Rilevate"):
+            st.write(st.session_state.raw_cols)
+
     if st.button("🔄 Reset"):
         st.session_state.raw_data = None
         st.session_state.suggestions = None
+        st.session_state.raw_cols = None
         st.rerun()
 
 # ==============================================================================
-# 3. DASHBOARD CON VISUALIZZAZIONE IMMAGINI
+# 3. DASHBOARD
 # ==============================================================================
 if st.session_state.raw_data is not None:
     df = st.session_state.raw_data
@@ -138,30 +142,30 @@ if st.session_state.raw_data is not None:
         
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # Configurazione tabella per mostrare le immagini
         st.dataframe(
             df, 
             use_container_width=True, 
             height=700, 
             hide_index=True,
             column_config={
-                "Copertina": st.column_config.ImageColumn("Copertina", help="Immagine del libro"),
+                "Copertina": st.column_config.ImageColumn("Copertina"),
                 "Prezzo": st.column_config.NumberColumn("Prezzo", format="%.2f €"),
-                "BSR": st.column_config.NumberColumn("BSR", format="%d")
+                "BSR": st.column_config.NumberColumn("BSR", format="%d"),
+                "Recensioni": st.column_config.NumberColumn("Recensioni", format="%d")
             }
         )
 
     with col_right:
         st.markdown("<div class='ai-panel'>", unsafe_allow_html=True)
         st.markdown("<div class='section-title' style='margin-top:0;'>✨ AI Strategy Lab</div>", unsafe_allow_html=True)
-        nicchia = st.text_input("Nicchia", placeholder="es. Low Carb Recipes")
-        target = st.text_input("Target", placeholder="es. Busy Moms")
+        nicchia = st.text_input("Nicchia", placeholder="es. Yoga for Seniors")
+        target = st.text_input("Target", placeholder="es. Principianti assoluti")
         
         if st.button("🪄 Genera Strategia", type="primary"):
             if nicchia and target:
                 with st.spinner("Analisi in corso..."):
                     client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                    prompt = f"Analizza nicchia '{nicchia}' per target '{target}' su mercato {st.session_state.selected_market}. Fornisci 3 titoli KDP, sottotitoli e trama."
+                    prompt = f"Analizza la nicchia '{nicchia}' per il target '{target}' sul mercato {st.session_state.selected_market}. Fornisci 3 titoli KDP, sottotitoli SEO e una trama breve basandoti sui dati di mercato."
                     response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}])
                     st.session_state.suggestions = response.choices[0].message.content
             else:
