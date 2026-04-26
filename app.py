@@ -7,7 +7,7 @@ import numpy as np
 # ==============================================================================
 # 1. DESIGN SYSTEM
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 14.3", page_icon="📈", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 14.4", page_icon="📈", layout="wide")
 
 st.markdown("""
     <style>
@@ -29,14 +29,14 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='program-title'>KDP Market Intelligence Hub v14.3</div>", unsafe_allow_html=True)
+st.markdown("<div class='program-title'>KDP Market Intelligence Hub v14.4</div>", unsafe_allow_html=True)
 
 # --- STATO ---
 for key in ['raw_data', 'suggestions', 'selected_market', 'pub_filter', 'raw_cols']:
     if key not in st.session_state: st.session_state[key] = None
 
 # ==============================================================================
-# 2. SIDEBAR (LOGICA DI IMPORT ATOMICA PER INSTANT DATA SCRAPER)
+# 2. SIDEBAR (LOGICA DI IMPORT ATOMICA POTENZIATA PER TUTTI I CSV)
 # ==============================================================================
 with st.sidebar:
     st.markdown("<p style='font-weight:700; color:#9ca3af; font-size:0.8rem;'>STEP 1: IMPORTA DATI</p>", unsafe_allow_html=True)
@@ -71,16 +71,15 @@ with st.sidebar:
 
                 mapped_df = pd.DataFrame(index=df_raw.index)
                 
-                # --- A: COPERTINA ---
-                img_col = find_col(['a-dynamic-image src', 'src', 'image', 'img', 'thumbnail', 'copertina'])
+                # --- A: COPERTINA (Aggiunto 's-image src') ---
+                img_col = find_col(['s-image src', 'a-dynamic-image src', 'src', 'image', 'img', 'thumbnail', 'copertina'])
                 mapped_df['Copertina'] = df_raw[img_col] if img_col else None
                 
                 # --- B: ID SEQUENZIALE ---
                 mapped_df['N. Libro'] = range(1, len(df_raw) + 1)
                 
-                # --- C: TITOLO E LINK (Cliccabile con FIX per i Float/NaN) ---
-                t_col = find_col(['_cdezb_p13n-sc-css-line-clamp-1_1fn1y', 'title', 'titolo', 'name', 'nome'])
-                # FIX: Riempiamo i valori vuoti con una stringa per evitare errori 'float' object has no attribute 'replace'
+                # --- C: TITOLO E LINK (Aggiunto 'a-size-medium') ---
+                t_col = find_col(['a-size-medium', '_cdezb_p13n-sc-css-line-clamp-1_1fn1y', 'title', 'titolo', 'name', 'nome', 'text-normal'])
                 raw_titles = df_raw[t_col].fillna("Titolo non disponibile").astype(str) if t_col else pd.Series(["N/D"] * len(df_raw))
                 
                 link_col = find_col(['a-link-normal href', 'href', 'url', 'link'])
@@ -96,7 +95,6 @@ with st.sidebar:
                         if len(asin_val) >= 10: return f"{base_url}/dp/{asin_val[:10]}"
                     return None
 
-                # Forziamo str(t) per sicurezza assoluta
                 mapped_df['Titolo'] = [f"[{str(t).replace('[','').replace(']','')}]({make_url(i)})" if make_url(i) else str(t) for i, t in enumerate(raw_titles)]
                 
                 # --- D: BSR (Rank) ---
@@ -117,29 +115,28 @@ with st.sidebar:
                 else:
                     mapped_df['BSR'] = np.nan
                 
-                # --- E: PREZZO ---
-                p_col = find_col(['p13n-sc-price', '_cdezb_p13n-sc-price_3mj9z', 'price', 'prezzo', 'costo'])
+                # --- E: PREZZO (Aggiunto 'a-offscreen') ---
+                p_col = find_col(['a-offscreen', 'p13n-sc-price', '_cdezb_p13n-sc-price_3mj9z', 'price', 'prezzo', 'costo'])
                 if p_col:
                     mapped_df['Prezzo'] = pd.to_numeric(df_raw[p_col].astype(str).str.replace(r'[^\d.,]', '', regex=True).str.replace(',', '.'), errors='coerce')
                 else:
                     mapped_df['Prezzo'] = np.nan
                 
-                # --- F: RECENSIONI E AUTORE ---
-                r_col = find_col(['a-size-small', 'a-icon-alt', 'review', 'rating', 'recensioni', 'voti', 'count'])
+                # --- F: RECENSIONI (Aggiunto 'a-size-mini') ---
+                r_col = find_col(['a-size-mini', 'a-size-small', 'a-icon-alt', 'review', 'rating', 'recensioni', 'voti', 'count'])
                 if r_col:
-                    # Usiamo regex per cercare di estrarre un numero valido (le recensioni totali, non le stelle)
                     def estrai_recensioni(testo):
                         testo = str(testo).replace('.', '').replace(',', '')
                         numeri = re.findall(r'\b\d+\b', testo)
-                        # Se è 'a-size-small', di solito il primo numero sono i voti. Se 'a-icon-alt' è tipo "4.5 out of 5 stars".
                         if numeri:
-                            return int(max(numeri, key=int)) # Prende il numero più alto trovato per evitare le stelle
+                            return int(max(numeri, key=int))
                         return np.nan
                     mapped_df['Recensioni'] = df_raw[r_col].apply(estrai_recensioni)
                 else:
                     mapped_df['Recensioni'] = np.nan
 
-                e_col = find_col(['a-color-secondary', 'brand', 'manufacturer', 'author', 'editore', 'publisher'])
+                # --- G: EDITORE E AUTORE (Aggiunto 'a-size-base 2') ---
+                e_col = find_col(['a-size-base 2', 'a-color-secondary', 'brand', 'manufacturer', 'author', 'editore', 'publisher'])
                 if e_col:
                     mapped_df['Editore'] = df_raw[e_col].apply(lambda x: "Independent" if any(s in str(x).lower() for s in ['independently', 'kdp', 'indipendente', 'createspace']) else "Publishing House")
                 else:
