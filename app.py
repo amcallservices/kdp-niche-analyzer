@@ -7,7 +7,7 @@ import numpy as np
 # ==============================================================================
 # 1. DESIGN SYSTEM
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 16.5", page_icon="💰", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 16.6", page_icon="💰", layout="wide")
 
 st.markdown("""
     <style>
@@ -22,12 +22,12 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='program-title'>KDP Intelligence Hub v16.5 💰</div>", unsafe_allow_html=True)
+st.markdown("<div class='program-title'>KDP Intelligence Hub v16.6 💰</div>", unsafe_allow_html=True)
 
 if 'raw_data' not in st.session_state: st.session_state.raw_data = None
 
 # ==============================================================================
-# 2. LOGICA DI ESTRAZIONE (BACKEND)
+# 2. LOGICA DI ESTRAZIONE (BACKEND AGGIORNATO)
 # ==============================================================================
 with st.sidebar:
     st.header("📥 Configurazione")
@@ -65,16 +65,35 @@ with st.sidebar:
                 temp['BSR'] = bsrs
                 temp['Autore'] = authors
                 
+                # --- AGGIUNTA RIGHE RICHIESTE ---
+                
+                # Mapping Copertina (Immagine)
+                img_c = next((c for c in cols if any(k in c.lower() for k in ['s-image src', 'image', 'copertina', 'src'])), None)
+                temp['Copertina'] = df_raw[img_c] if img_c else None
+
+                # Mapping Titolo
+                tit_c = next((c for c in cols if any(k in c.lower() for k in ['a-size-medium', 'title', 'titolo', 'name'])), None)
+                temp['Titolo'] = df_raw[tit_c] if tit_c else "N/D"
+
                 # Mapping Prezzo
                 p_c = next((c for c in cols if any(k in c.lower() for k in ['price', 'prezzo', 'offscreen'])), None)
                 if p_c: temp['Prezzo'] = pd.to_numeric(df_raw[p_c].astype(str).str.replace(r'[^\d.,]', '', regex=True).str.replace(',', '.'), errors='coerce')
+                
+                # Mapping Recensioni
+                rev_c = next((c for c in cols if any(k in c.lower() for k in ['review', 'voti', 'rating', 'a-size-base'])), None)
+                if rev_c:
+                    def clean_rev(v):
+                        n = re.findall(r'\b\d+\b', str(v).replace('.','').replace(',',''))
+                        return int(max(n, key=int)) if n else np.nan
+                    temp['Recensioni'] = df_raw[rev_c].apply(clean_rev)
+                else: temp['Recensioni'] = np.nan
                 
                 all_dfs.append(temp)
             st.session_state.raw_data = pd.concat(all_dfs, ignore_index=True)
             st.rerun()
 
 # ==============================================================================
-# 3. PROFITABILITY ANALYSIS (IL TUO NUOVO STEP RAGIONATO)
+# 3. PROFITABILITY ANALYSIS
 # ==============================================================================
 if st.session_state.raw_data is not None:
     df = st.session_state.raw_data.copy()
@@ -86,7 +105,6 @@ if st.session_state.raw_data is not None:
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        # Calcolo dello stato di salute basato sul BSR
         if avg_bsr < 20000:
             status, color, desc = "MOLTO ALTO", "status-green", "Domanda massiccia. Vendite quotidiane garantite."
         elif avg_bsr < 80000:
@@ -96,16 +114,9 @@ if st.session_state.raw_data is not None:
         else:
             status, color, desc = "BASSO", "status-red", "Poco movimento. Rischio di invenduto elevato."
             
-        st.markdown(f"""
-        <div class='profit-card'>
-            <p style='margin:0; font-size:0.9rem; color:#8b949e;'>POTENZIALE VENDITE</p>
-            <h2 class='{color}'>{status}</h2>
-            <p style='font-size:0.85rem;'>{desc}</p>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(f"<div class='profit-card'><p style='margin:0; font-size:0.9rem; color:#8b949e;'>POTENZIALE VENDITE</p><h2 class='{color}'>{status}</h2><p style='font-size:0.85rem;'>{desc}</p></div>", unsafe_allow_html=True)
 
     with col2:
-        # Ragionamento sul margine (Prezzo)
         if avg_price > 14.0:
             p_status, p_color = "MARGINE ALTO", "status-green"
         elif avg_price > 9.0:
@@ -113,16 +124,9 @@ if st.session_state.raw_data is not None:
         else:
             p_status, p_color = "MARGINE BASSO", "status-red"
             
-        st.markdown(f"""
-        <div class='profit-card'>
-            <p style='margin:0; font-size:0.9rem; color:#8b949e;'>PROFILO ECONOMICO</p>
-            <h2 class='{p_color}'>{p_status}</h2>
-            <p style='font-size:0.85rem;'>Basato su un prezzo medio di {avg_price:.2f}€.</p>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(f"<div class='profit-card'><p style='margin:0; font-size:0.9rem; color:#8b949e;'>PROFILO ECONOMICO</p><h2 class='{p_color}'>{p_status}</h2><p style='font-size:0.85rem;'>Basato su un prezzo medio di {avg_price:.2f}€.</p></div>", unsafe_allow_html=True)
 
     with col3:
-        # Verdetto Finale
         if avg_bsr < 80000 and avg_price > 12:
             verdict = "ECCELLENTE: Entra ora."
         elif avg_bsr < 100000:
@@ -130,29 +134,39 @@ if st.session_state.raw_data is not None:
         else:
             verdict = "CAUTELA: Nicchia satura o ferma."
             
-        st.markdown(f"""
-        <div class='profit-card'>
-            <p style='margin:0; font-size:0.9rem; color:#8b949e;'>VERDETTO OMNI-REASONER</p>
-            <h2 style='color:#58a6ff;'>{verdict}</h2>
-            <p style='font-size:0.85rem;'>Analisi calcolata su {len(df)} libri concorrenti.</p>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(f"<div class='profit-card'><p style='margin:0; font-size:0.9rem; color:#8b949e;'>VERDETTO OMNI-REASONER</p><h2 style='color:#58a6ff;'>{verdict}</h2><p style='font-size:0.85rem;'>Analisi calcolata su {len(df)} libri concorrenti.</p></div>", unsafe_allow_html=True)
 
     st.markdown("---")
 
     # ==============================================================================
-    # 4. STEP 2: AI STRATEGY LAB & DATA TABLE
+    # 4. STEP 2: AI STRATEGY LAB & DATA TABLE (AGGIORNATA CON COLONNE)
     # ==============================================================================
     col_table, col_ai = st.columns([7, 3])
     
     with col_table:
         st.markdown("<p class='section-title'>Dati Estratti (BSR Globale Corretto)</p>", unsafe_allow_html=True)
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        
+        # Selezione ordinata delle colonne richieste
+        display_cols = ["Copertina", "Titolo", "BSR", "Prezzo", "Autore", "Recensioni"]
+        
+        st.dataframe(
+            df[display_cols], 
+            use_container_width=True, 
+            hide_index=True,
+            height=600,
+            column_config={
+                "Copertina": st.column_config.ImageColumn("Cover", width="small"),
+                "Titolo": st.column_config.TextColumn("Titolo Libro", width="large"),
+                "Prezzo": st.column_config.NumberColumn("Prezzo (€)", format="%.2f"),
+                "Recensioni": st.column_config.NumberColumn("Recensioni", format="%d"),
+                "BSR": st.column_config.NumberColumn("BSR Rank", format="%d")
+            }
+        )
 
     with col_ai:
         st.markdown("<div class='ai-panel'>", unsafe_allow_html=True)
         st.markdown("<h3>✨ AI Strategy Lab</h3>", unsafe_allow_html=True)
-        nicchia = st.text_input("Nicchia Target")
+        nicchia_target = st.text_input("Nicchia Target")
         if st.button("🪄 GENERA STRATEGIA"):
-            st.write(f"Analisi AI per {nicchia} basata su BSR medio di {int(avg_bsr)}...")
+            st.write(f"Analisi AI per {nicchia_target} basata su BSR medio di {int(avg_bsr)}...")
         st.markdown("</div>", unsafe_allow_html=True)
