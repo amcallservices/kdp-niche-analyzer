@@ -5,9 +5,9 @@ import re
 import numpy as np
 
 # ==============================================================================
-# 1. DESIGN SYSTEM (DARK MODE PER AI PANEL AGGIUNTA)
+# 1. DESIGN SYSTEM
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 15.5", page_icon="📈", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 15.6", page_icon="📈", layout="wide")
 
 st.markdown("""
     <style>
@@ -22,11 +22,11 @@ st.markdown("""
         section[data-testid="stSidebar"] { background-color: #111827 !important; min-width: 350px !important; border-right: 1px solid #374151; padding-top: 1rem; }
         section[data-testid="stSidebar"] * { color: #f3f4f6 !important; }
         
-        /* Titoli e Testi */
+        /* Titoli Principali */
         .program-title { color: #111827 !important; font-size: 2rem !important; font-weight: 800; border-bottom: 1px solid #e5e7eb; padding-bottom: 0.5rem; margin-bottom: 1rem; }
         .section-title { color: #374151 !important; font-size: 1.2rem !important; font-weight: 700; margin-bottom: 1rem; }
         
-        /* DARK AI PANEL STYLING */
+        /* DARK AI PANEL - TESTI CHIARI E LEGGIBILI */
         .ai-panel { 
             background-color: #1f2937; 
             padding: 2rem; 
@@ -35,9 +35,22 @@ st.markdown("""
             box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3);
             color: #ffffff !important;
         }
-        .ai-panel h3, .ai-panel p, .ai-panel span { color: #ffffff !important; }
-        .ai-panel label { color: #9ca3af !important; font-weight: 600; }
+        .ai-panel h3 { color: #60a5fa !important; margin-top:0; margin-bottom: 5px; }
+        .ai-panel p { color: #d1d5db !important; font-size: 0.9rem; margin-bottom: 20px; }
         
+        /* Input Fields in Dark Mode */
+        div[data-testid="stWidgetLabel"] p {
+            color: #ffffff !important; /* TESTO DELLE ETICHETTE BIANCO */
+            font-weight: 600 !important;
+            font-size: 1rem !important;
+        }
+        
+        .stTextInput input {
+            background-color: #374151 !important;
+            color: #ffffff !important;
+            border: 1px solid #4b5563 !important;
+        }
+
         /* Button Styling */
         .stButton button { border-radius: 8px !important; font-weight: 600 !important; width: 100%; transition: 0.3s; }
         button[kind="primary"] { background-color: #3b82f6 !important; color: white !important; border: none !important; }
@@ -45,7 +58,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='program-title'>KDP Market Intelligence Hub v15.5</div>", unsafe_allow_html=True)
+st.markdown("<div class='program-title'>KDP Market Intelligence Hub v15.6</div>", unsafe_allow_html=True)
 
 # --- INIZIALIZZAZIONE STATO ---
 if 'raw_data' not in st.session_state: st.session_state.raw_data = None
@@ -62,7 +75,7 @@ with st.sidebar:
     domain_map = {"IT": "amazon.it", "US": "amazon.com", "UK": "amazon.co.uk", "DE": "amazon.de", "FR": "amazon.fr", "ES": "amazon.es"}
     base_url = f"https://www.{domain_map[mkt_choice]}"
 
-    uploaded_files = st.file_uploader("Trascina fino a 100 CSV", type=["csv"], accept_multiple_files=True)
+    uploaded_files = st.file_uploader("Trascina qui fino a 100 CSV", type=["csv"], accept_multiple_files=True)
 
     if st.button("📊 Elabora Tutti i File", type="primary"):
         if uploaded_files:
@@ -96,7 +109,13 @@ with st.sidebar:
                     return val if 'http' in val else f"{base_url}{val}"
                 temp['Titolo'] = [f"[{str(t).replace('[','').replace(']','')}]({get_url(i)})" if get_url(i) else str(t) for i, t in enumerate(raw_t)]
                 
+                # BSR RADAR
                 b_col = find_col(['zg-bdg-text', 'rank', 'bsr', 'classifica'])
+                if not b_col:
+                    for c in df_raw.columns:
+                        if df_raw[c].astype(str).str.contains('#').any():
+                            b_col = c
+                            break
                 if b_col:
                     def clean_bsr(val):
                         m = re.search(r'#?(\d{1,3}(?:[.,]\d{3})*|\d+)', str(val))
@@ -104,7 +123,7 @@ with st.sidebar:
                     temp['BSR'] = df_raw[b_col].apply(clean_bsr)
                 else: temp['BSR'] = np.nan
 
-                p_col = find_col(['a-offscreen', 'price', 'prezzo', 'p13n-sc-price'])
+                p_col = find_col(['a-offscreen', 'price', 'prezzo', 'p13n-sc-price', 'a-price-whole'])
                 if p_col: temp['Prezzo'] = pd.to_numeric(df_raw[p_col].astype(str).str.replace(r'[^\d.,]', '', regex=True).str.replace(',', '.'), errors='coerce')
                 
                 r_col = find_col(['a-size-base', 'voti', 'review', 'rating'])
@@ -134,17 +153,17 @@ with st.sidebar:
 
     if st.session_state.raw_data is not None:
         st.markdown("---")
-        st.markdown("<p style='font-weight:700; color:#60a5fa; font-size:0.9rem;'>STEP 2: FILTRO CATEGORIA</p>", unsafe_allow_html=True)
-        tipo_filtro = st.selectbox("Seleziona Tipo Editore:", ["Tutti", "Independent", "Publishing House"])
+        st.markdown("<p style='font-weight:700; color:#60a5fa; font-size:0.9rem;'>STEP 2: FILTRO EDITORE</p>", unsafe_allow_html=True)
+        tipo_filtro = st.selectbox("Mostra Libri di:", ["Tutti", "Independent", "Publishing House"])
         st.session_state.pub_filter = tipo_filtro
 
-    if st.button("🔄 Reset"):
+    if st.button("🔄 Reset Tabella"):
         st.session_state.raw_data = None
         st.session_state.suggestions = None
         st.rerun()
 
 # ==============================================================================
-# 3. DASHBOARD E AI STRATEGY LAB (DARK MODE)
+# 3. DASHBOARD E AI STRATEGY LAB (HIGH CONTRAST DARK)
 # ==============================================================================
 if st.session_state.raw_data is not None:
     df_f = st.session_state.raw_data.copy()
@@ -166,18 +185,18 @@ if st.session_state.raw_data is not None:
             column_config={
                 "Copertina": st.column_config.ImageColumn("Cover"),
                 "Prezzo": st.column_config.NumberColumn("Prezzo (€)", format="%.2f"),
-                "Titolo": st.column_config.TextColumn("Titolo (Cliccabile)", width="large")
+                "Titolo": st.column_config.TextColumn("Titolo (Clicca)", width="large")
             }
         )
 
     with col_r:
-        # APERTURA PANEL DARK
         st.markdown("<div class='ai-panel'>", unsafe_allow_html=True)
-        st.markdown("<h3 style='margin-top:0; color:#3b82f6;'>✨ AI Strategy Lab</h3>", unsafe_allow_html=True)
-        st.markdown("<p style='font-size:0.9rem; color:#9ca3af;'>Analisi avanzata basata sui dati filtrati</p>", unsafe_allow_html=True)
+        st.markdown("<h3>✨ AI Strategy Lab</h3>", unsafe_allow_html=True)
+        st.markdown("<p>Analisi avanzata basata sui dati filtrati</p>", unsafe_allow_html=True)
         
-        nicchia = st.text_input("Definisci Nicchia")
-        target = st.text_input("Definisci Target")
+        # ETICHETTE ORA BIANCHE GRAZIE AL CSS
+        nicchia = st.text_input("Definisci Nicchia", placeholder="es. Yoga per Anziani")
+        target = st.text_input("Definisci Target", placeholder="es. Principianti assoluti")
         
         if st.button("🪄 Genera Strategia KDP", type="primary"):
             if nicchia and target:
@@ -185,16 +204,16 @@ if st.session_state.raw_data is not None:
                     try:
                         client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
                         tipo = st.session_state.get('pub_filter', 'Tutti')
-                        prompt = f"Sei un esperto KDP. Analizza la nicchia '{nicchia}' per il target '{target}'. Filtro: {tipo}. Suggerisci 3 titoli, sottotitoli SEO e trama."
+                        prompt = f"Expert KDP analyzer. Nicchia: {nicchia}, Target: {target}. Analisi basata su dati {tipo}. Genera 3 titoli, sottotitoli e trama."
                         res = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}])
                         st.session_state.suggestions = res.choices[0].message.content
                     except Exception as e:
-                        st.error(f"Errore: {e}")
+                        st.error(f"Errore API: {e}")
         
         if st.session_state.suggestions:
             st.markdown("<br><hr style='border-color:#374151;'><br>", unsafe_allow_html=True)
             st.markdown(st.session_state.suggestions)
             
-        st.markdown("</div>", unsafe_allow_html=True) # CHIUSURA PANEL DARK
+        st.markdown("</div>", unsafe_allow_html=True)
 else:
-    st.info("👈 Carica i file CSV per avviare l'analisi.")
+    st.info("👈 Trascina i file CSV nella sidebar per iniziare.")
