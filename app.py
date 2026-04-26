@@ -7,7 +7,7 @@ import numpy as np
 # ==============================================================================
 # 1. DESIGN SYSTEM
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 13.9.1", page_icon="📈", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 14.1", page_icon="📈", layout="wide")
 
 st.markdown("""
     <style>
@@ -29,14 +29,14 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='program-title'>KDP Market Intelligence Hub v13.9.1</div>", unsafe_allow_html=True)
+st.markdown("<div class='program-title'>KDP Market Intelligence Hub v14.1</div>", unsafe_allow_html=True)
 
 # --- STATO ---
 for key in ['raw_data', 'suggestions', 'selected_market', 'pub_filter', 'raw_cols']:
     if key not in st.session_state: st.session_state[key] = None
 
 # ==============================================================================
-# 2. SIDEBAR E LOGICA DI IMPORT
+# 2. SIDEBAR (LOGICA DI IMPORT ATOMICA PER INSTANT DATA SCRAPER)
 # ==============================================================================
 with st.sidebar:
     st.markdown("<p style='font-weight:700; color:#9ca3af; font-size:0.8rem;'>STEP 1: IMPORTA DATI</p>", unsafe_allow_html=True)
@@ -53,11 +53,12 @@ with st.sidebar:
     if st.button("📊 Elabora Dati", type="primary"):
         if uploaded_file:
             try:
+                # 1. Lettura robusta del CSV
                 try:
-                    df_raw = pd.read_csv(uploaded_file, sep=None, engine='python', encoding='utf-8')
+                    df_raw = pd.read_csv(uploaded_file, sep=None, engine='python', encoding='utf-8', on_bad_lines='skip')
                 except:
                     uploaded_file.seek(0)
-                    df_raw = pd.read_csv(uploaded_file, sep=None, engine='python', encoding='latin-1')
+                    df_raw = pd.read_csv(uploaded_file, sep=None, engine='python', encoding='latin-1', on_bad_lines='skip')
 
                 cols = df_raw.columns.tolist()
                 st.session_state.raw_cols = cols 
@@ -65,20 +66,24 @@ with st.sidebar:
                 def find_col(keywords):
                     for k in keywords:
                         for c in cols:
-                            if k.lower() in str(c).lower().strip(): return c
+                            clean_c = str(c).lower().strip().replace('\n', ' ').replace('\r', '')
+                            if k.lower() in clean_c: return c
                     return None
 
                 mapped_df = pd.DataFrame()
                 
-                # 1. COPERTINA
-                img_col = find_col(['image', 'img', 'thumbnail', 'photo', 'src', 'a-dynamic-image'])
+                # --- A: COPERTINA ---
+                img_col = find_col(['src', 'image', 'img', 'thumbnail', 'copertina'])
                 mapped_df['Copertina'] = df_raw[img_col] if img_col else None
                 
-                # 2. TITOLO E LINK
-                t_col = find_col(['title', 'titolo', 'name', 'nome', 'product', 'text', 'a-size-medium', 'a-link-normal', 's-line-clamp'])
+                # --- B: ID SEQUENZIALE ---
+                mapped_df['N. Libro'] = range(1, len(df_raw) + 1)
+                
+                # --- C: TITOLO E LINK (Cliccabile) ---
+                t_col = find_col(['line-clamp', 'title', 'titolo', 'name', 'nome'])
                 raw_titles = df_raw[t_col].astype(str).replace('nan', 'Titolo non trovato') if t_col else pd.Series(["N/D"] * len(df_raw))
                 
-                link_col = find_col(['url', 'link', 'href', 'page url'])
+                link_col = find_col(['href', 'url', 'link'])
                 asin_col = find_col(['asin', 'id'])
                 
                 def make_url(row_idx):
@@ -91,58 +96,58 @@ with st.sidebar:
                         if len(asin_val) >= 10: return f"{base_url}/dp/{asin_val[:10]}"
                     return None
 
-                mapped_df['Titolo'] = [f"[{t}]({make_url(i)})" if make_url(i) else t for i, t in enumerate(raw_titles)]
+                # Genera il link Markdown per Streamlit
+                mapped_df['Titolo'] = [f"[{t.replace('[','').replace(']','')}]({make_url(i)})" if make_url(i) else t for i, t in enumerate(raw_titles)]
                 
-                # 3. BSR (LA NUOVA LOGICA "TERMINATOR")
-                b_col = find_col(['bsr', 'rank', 'classifica', 'sales', 'posizione', 'ranking', 'best sellers'])
+                # --- D: BSR (Rank) ---
+                # 'zg-bdg-text' è esattamente come Instant Data Scraper chiama il BSR in pagina
+                b_col = find_col(['zg-bdg-text', 'bsr', 'rank', 'classifica', 'sales', 'best'])
                 if b_col:
-                    def estrai_primo_numero_pulito(testo):
-                        if pd.isna(testo): return np.nan
-                        # Converte in stringa
-                        testo = str(testo)
-                        # Rimuove tutto tranne numeri, punti e virgole
-                        solo_numeri_e_punteggiatura = re.sub(r'[^\d.,]', '', testo)
-                        # Rimuove punti e virgole (formattazione europea/USA) per avere il numero puro
-                        numero_pulito = solo_numeri_e_punteggiatura.replace('.', '').replace(',', '')
-                        # Se è rimasto un numero, lo restituisce come int
-                        if numero_pulito.isdigit():
-                            return int(numero_pulito)
-                        return np.nan
+                    def estrai_bsr_estremo(testo):
+                        try:
+                            t = str(testo).lower()
+                            if t == 'nan' or t == 'none' or t == '' or pd.isna(testo): return np.nan
+                            # Prende solo il numero "puro" rimuovendo cancelletti (es. #1 diventa 1)
+                            match = re.search(r'\b(\d{1,3}(?:[.,]\d{3})*|\d+)\b', t)
+                            if match:
+                                numero_pulito = match.group(1).replace('.', '').replace(',', '')
+                                return int(numero_pulito)
+                            return np.nan
+                        except: return np.nan
 
-                    mapped_df['BSR'] = df_raw[b_col].apply(estrai_primo_numero_pulito)
+                    mapped_df['BSR'] = df_raw[b_col].apply(estrai_bsr_estremo)
                 else:
                     mapped_df['BSR'] = np.nan
                 
-                # 4. PREZZO
-                p_col = find_col(['price', 'prezzo', 'list price', 'buy price', 'costo', 'a-offscreen', 'a-price'])
+                # --- E: PREZZO ---
+                p_col = find_col(['price', 'prezzo', 'costo'])
                 if p_col:
                     mapped_df['Prezzo'] = pd.to_numeric(df_raw[p_col].astype(str).str.replace(r'[^\d.,]', '', regex=True).str.replace(',', '.'), errors='coerce')
                 else:
                     mapped_df['Prezzo'] = np.nan
                 
-                # 5. RECENSIONI
-                r_col = find_col(['review count', 'ratings', 'recensioni', 'voti', 'reviews', 's-underline-text', 'a-size-base', 'count'])
+                # --- F: RECENSIONI E AUTORE ---
+                r_col = find_col(['review', 'rating', 'recensioni', 'voti', 'count', 'a-size-small'])
                 if r_col:
                     mapped_df['Recensioni'] = pd.to_numeric(df_raw[r_col].astype(str).str.replace(r'[^\d]', '', regex=True), errors='coerce')
                 else:
                     mapped_df['Recensioni'] = np.nan
 
-                # 6. EDITORE
-                e_col = find_col(['brand', 'manufacturer', 'author', 'editore', 'publisher', 'marca', 'vendor', 'byline'])
+                e_col = find_col(['a-color-secondary', 'brand', 'manufacturer', 'author', 'editore', 'publisher'])
                 if e_col:
                     mapped_df['Editore'] = df_raw[e_col].apply(lambda x: "Independent" if any(s in str(x).lower() for s in ['independently', 'kdp', 'indipendente', 'createspace']) else "Publishing House")
                 else:
                     mapped_df['Editore'] = "N/D"
 
                 st.session_state.raw_data = mapped_df
-                st.success("Dati estratti e puliti.")
+                st.success("Dati estratti e perfettamente puliti!")
             except Exception as e:
-                st.error(f"Errore tecnico: {e}")
+                st.error(f"Errore durante l'elaborazione del file: {e}")
         else:
-            st.warning("Carica un file prima.")
+            st.warning("Carica un file prima di elaborare.")
 
     if st.session_state.raw_cols:
-        with st.expander("🔍 Mapping Helper"):
+        with st.expander("🔍 Mapping Helper (Diagnostica CSV)"):
             st.write(st.session_state.raw_cols)
 
     if st.button("🔄 Reset"):
@@ -152,10 +157,11 @@ with st.sidebar:
         st.rerun()
 
 # ==============================================================================
-# 3. DASHBOARD
+# 3. DASHBOARD E TABELLA
 # ==============================================================================
 if st.session_state.raw_data is not None:
     df = st.session_state.raw_data
+    
     if st.session_state.pub_filter != "Tutti":
         df = df[df['Editore'] == st.session_state.pub_filter]
 
@@ -164,46 +170,54 @@ if st.session_state.raw_data is not None:
     with col_left:
         st.markdown(f"<div class='section-title'>Mercato: {st.session_state.selected_market}</div>", unsafe_allow_html=True)
         
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Libri", len(df))
-        m2.metric("Prezzo Avg", f"{df['Prezzo'].mean():.2f} €" if pd.notna(df['Prezzo'].mean()) else "N/D")
-        m3.metric("BSR Avg", f"{int(df['BSR'].mean())}" if pd.notna(df['BSR'].mean()) else "N/D")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Libri Rilevati", len(df))
+        prezzo_medio = df['Prezzo'].mean()
+        c2.metric("Prezzo Avg", f"{prezzo_medio:.2f} €" if pd.notna(prezzo_medio) else "N/D")
+        bsr_medio = df['BSR'].mean()
+        c3.metric("BSR Avg", f"{int(bsr_medio):,}".replace(',', '.') if pd.notna(bsr_medio) else "N/D")
         
         st.markdown("<br>", unsafe_allow_html=True)
         
+        # Ordiniamo le colonne per dare priorità all'immagine, all'ID e al BSR
+        col_order = ["Copertina", "N. Libro", "BSR", "Titolo", "Prezzo", "Recensioni", "Editore"]
+        df_display = df[col_order]
+        
         st.dataframe(
-            df, 
+            df_display, 
             use_container_width=True, 
             height=700, 
             hide_index=True,
             column_config={
-                "Copertina": st.column_config.ImageColumn("Copertina", width="small"),
-                "Titolo": st.column_config.TextColumn("Titolo (Cliccabile)", width="large"),
-                "Prezzo": st.column_config.NumberColumn("Prezzo (€)", format="%.2f"),
-                "BSR": st.column_config.NumberColumn("BSR Rank", format="%d"),
-                "Recensioni": st.column_config.NumberColumn("Recensioni", format="%d")
+                "Copertina": st.column_config.ImageColumn("Cover", width="small"),
+                "N. Libro": st.column_config.NumberColumn("ID", width="small"),
+                "BSR": st.column_config.NumberColumn("BSR Rank", format="%d", width="small"),
+                "Titolo": st.column_config.TextColumn("Titolo (Clicca per aprire)", width="large"),
+                "Prezzo": st.column_config.NumberColumn("Prezzo", format="%.2f", width="small"),
+                "Recensioni": st.column_config.NumberColumn("Recensioni", format="%d", width="small"),
+                "Editore": st.column_config.TextColumn("Tipo Editore", width="medium")
             }
         )
 
     with col_right:
         st.markdown("<div class='ai-panel'>", unsafe_allow_html=True)
         st.markdown("<div class='section-title' style='margin-top:0;'>✨ AI Strategy Lab</div>", unsafe_allow_html=True)
-        nicchia = st.text_input("Nicchia analizzata", placeholder="es. Ricette Sane")
-        target = st.text_input("Target Lettore", placeholder="es. Studenti fuori sede")
+        nicchia = st.text_input("Nicchia analizzata", placeholder="es. Real Estate Investing")
+        target = st.text_input("Target Lettore", placeholder="es. Principianti e impiegati")
         
         if st.button("🪄 Genera Idee KDP", type="primary"):
             if nicchia and target:
-                with st.spinner("L'AI sta studiando i dati..."):
+                with st.spinner("L'AI sta studiando i dati e generando la strategia..."):
                     client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                    prompt = f"Basandoti sul mercato KDP {st.session_state.selected_market}, analizza la nicchia '{nicchia}' per il target '{target}'. Suggerisci 3 titoli magnetici, sottotitoli SEO e una trama persuasiva."
+                    prompt = f"Basandoti sul mercato KDP {st.session_state.selected_market}, analizza la nicchia '{nicchia}' per il target '{target}'. Suggerisci 3 titoli magnetici, sottotitoli SEO e una trama persuasiva ispirata alle best practices del mercato."
                     response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}])
                     st.session_state.suggestions = response.choices[0].message.content
             else:
-                st.error("Riempi i campi nicchia e target.")
+                st.error("Riempi i campi nicchia e target per avviare l'IA.")
         
         if st.session_state.suggestions:
             st.markdown("---")
             st.markdown(st.session_state.suggestions)
         st.markdown("</div>", unsafe_allow_html=True)
 else:
-    st.info("👈 Carica il file CSV nella sidebar.")
+    st.info("👈 Carica il file CSV nella sidebar per avviare il tool.")
