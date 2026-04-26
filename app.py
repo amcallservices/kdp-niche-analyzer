@@ -7,7 +7,7 @@ import numpy as np
 # ==============================================================================
 # 1. DESIGN SYSTEM
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 13.9", page_icon="📈", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 13.9.1", page_icon="📈", layout="wide")
 
 st.markdown("""
     <style>
@@ -29,14 +29,14 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='program-title'>KDP Market Intelligence Hub v13.9</div>", unsafe_allow_html=True)
+st.markdown("<div class='program-title'>KDP Market Intelligence Hub v13.9.1</div>", unsafe_allow_html=True)
 
 # --- STATO ---
 for key in ['raw_data', 'suggestions', 'selected_market', 'pub_filter', 'raw_cols']:
     if key not in st.session_state: st.session_state[key] = None
 
 # ==============================================================================
-# 2. SIDEBAR (LOGICA DI MAPPATURA UNIVERSALE)
+# 2. SIDEBAR E LOGICA DI IMPORT
 # ==============================================================================
 with st.sidebar:
     st.markdown("<p style='font-weight:700; color:#9ca3af; font-size:0.8rem;'>STEP 1: IMPORTA DATI</p>", unsafe_allow_html=True)
@@ -74,11 +74,10 @@ with st.sidebar:
                 img_col = find_col(['image', 'img', 'thumbnail', 'photo', 'src', 'a-dynamic-image'])
                 mapped_df['Copertina'] = df_raw[img_col] if img_col else None
                 
-                # 2. TITOLO (Mapping Aggressivo)
+                # 2. TITOLO E LINK
                 t_col = find_col(['title', 'titolo', 'name', 'nome', 'product', 'text', 'a-size-medium', 'a-link-normal', 's-line-clamp'])
                 raw_titles = df_raw[t_col].astype(str).replace('nan', 'Titolo non trovato') if t_col else pd.Series(["N/D"] * len(df_raw))
                 
-                # 3. LINK & ASIN (Per rendere i titoli cliccabili)
                 link_col = find_col(['url', 'link', 'href', 'page url'])
                 asin_col = find_col(['asin', 'id'])
                 
@@ -92,33 +91,43 @@ with st.sidebar:
                         if len(asin_val) >= 10: return f"{base_url}/dp/{asin_val[:10]}"
                     return None
 
-                # Creazione colonna Titolo Cliccabile
                 mapped_df['Titolo'] = [f"[{t}]({make_url(i)})" if make_url(i) else t for i, t in enumerate(raw_titles)]
                 
-                # 4. BSR (Pulizia Numerica Forzata)
+                # 3. BSR (LA NUOVA LOGICA "TERMINATOR")
                 b_col = find_col(['bsr', 'rank', 'classifica', 'sales', 'posizione', 'ranking', 'best sellers'])
                 if b_col:
-                    # Rimuove tutto ciò che non è un numero per evitare errori di conversione
-                    mapped_df['BSR'] = df_raw[b_col].astype(str).str.replace(r'[^\d]', '', regex=True)
-                    mapped_df['BSR'] = pd.to_numeric(mapped_df['BSR'], errors='coerce')
+                    def estrai_primo_numero_pulito(testo):
+                        if pd.isna(testo): return np.nan
+                        # Converte in stringa
+                        testo = str(testo)
+                        # Rimuove tutto tranne numeri, punti e virgole
+                        solo_numeri_e_punteggiatura = re.sub(r'[^\d.,]', '', testo)
+                        # Rimuove punti e virgole (formattazione europea/USA) per avere il numero puro
+                        numero_pulito = solo_numeri_e_punteggiatura.replace('.', '').replace(',', '')
+                        # Se è rimasto un numero, lo restituisce come int
+                        if numero_pulito.isdigit():
+                            return int(numero_pulito)
+                        return np.nan
+
+                    mapped_df['BSR'] = df_raw[b_col].apply(estrai_primo_numero_pulito)
                 else:
                     mapped_df['BSR'] = np.nan
                 
-                # 5. PREZZO
+                # 4. PREZZO
                 p_col = find_col(['price', 'prezzo', 'list price', 'buy price', 'costo', 'a-offscreen', 'a-price'])
                 if p_col:
                     mapped_df['Prezzo'] = pd.to_numeric(df_raw[p_col].astype(str).str.replace(r'[^\d.,]', '', regex=True).str.replace(',', '.'), errors='coerce')
                 else:
                     mapped_df['Prezzo'] = np.nan
                 
-                # 6. RECENSIONI
+                # 5. RECENSIONI
                 r_col = find_col(['review count', 'ratings', 'recensioni', 'voti', 'reviews', 's-underline-text', 'a-size-base', 'count'])
                 if r_col:
                     mapped_df['Recensioni'] = pd.to_numeric(df_raw[r_col].astype(str).str.replace(r'[^\d]', '', regex=True), errors='coerce')
                 else:
                     mapped_df['Recensioni'] = np.nan
 
-                # 7. EDITORE
+                # 6. EDITORE
                 e_col = find_col(['brand', 'manufacturer', 'author', 'editore', 'publisher', 'marca', 'vendor', 'byline'])
                 if e_col:
                     mapped_df['Editore'] = df_raw[e_col].apply(lambda x: "Independent" if any(s in str(x).lower() for s in ['independently', 'kdp', 'indipendente', 'createspace']) else "Publishing House")
@@ -126,14 +135,14 @@ with st.sidebar:
                     mapped_df['Editore'] = "N/D"
 
                 st.session_state.raw_data = mapped_df
-                st.success("Analisi completata!")
+                st.success("Dati estratti e puliti.")
             except Exception as e:
                 st.error(f"Errore tecnico: {e}")
         else:
             st.warning("Carica un file prima.")
 
     if st.session_state.raw_cols:
-        with st.expander("🔍 Mapping Helper (Nomi Colonne trovati)"):
+        with st.expander("🔍 Mapping Helper"):
             st.write(st.session_state.raw_cols)
 
     if st.button("🔄 Reset"):
@@ -197,4 +206,4 @@ if st.session_state.raw_data is not None:
             st.markdown(st.session_state.suggestions)
         st.markdown("</div>", unsafe_allow_html=True)
 else:
-    st.info("👈 Carica il file CSV nella sidebar. Se i dati non appaiono, controlla il pannello 'Mapping Helper' nella sidebar.")
+    st.info("👈 Carica il file CSV nella sidebar.")
