@@ -7,7 +7,7 @@ import numpy as np
 # ==============================================================================
 # 1. DESIGN SYSTEM - TOTAL DARK MODE
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 16.0", page_icon="🌙", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 16.1", page_icon="🌙", layout="wide")
 
 st.markdown("""
     <style>
@@ -27,13 +27,13 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='program-title'>KDP Market Intelligence Hub v16.0 🌙</div>", unsafe_allow_html=True)
+st.markdown("<div class='program-title'>KDP Market Intelligence Hub v16.1 🌙</div>", unsafe_allow_html=True)
 
 if 'raw_data' not in st.session_state: st.session_state.raw_data = None
 if 'suggestions' not in st.session_state: st.session_state.suggestions = None
 
 # ==============================================================================
-# 2. SIDEBAR - ELABORAZIONE ROBUSTA
+# 2. SIDEBAR - ELABORAZIONE INTELLIGENTE
 # ==============================================================================
 with st.sidebar:
     st.markdown("<p style='font-weight:700; color:#58a6ff;'>📥 CARICAMENTO DATI</p>", unsafe_allow_html=True)
@@ -43,7 +43,7 @@ with st.sidebar:
     domain_map = {"IT": "amazon.it", "US": "amazon.com", "UK": "amazon.co.uk", "DE": "amazon.de", "FR": "amazon.fr", "ES": "amazon.es"}
     base_url = f"https://www.{domain_map[mkt]}"
 
-    files = st.file_uploader("Trascina i tuoi CSV qui", type=["csv"], accept_multiple_files=True)
+    files = st.file_uploader("Trascina qui i tuoi CSV", type=["csv"], accept_multiple_files=True)
 
     if st.button("📊 ANALIZZA TUTTO", type="primary"):
         if files:
@@ -56,22 +56,26 @@ with st.sidebar:
                     df_raw = pd.read_csv(f, sep=None, engine='python', encoding='latin-1', on_bad_lines='skip')
 
                 cols = df_raw.columns.tolist()
+                
+                # Funzione di ricerca flessibile
                 def find_col(keys):
                     for k in keys:
                         for c in cols:
                             if k.lower() in str(c).lower().strip(): return c
                     return None
 
-                # INIZIALIZZAZIONE PREVENTIVA (Evita il KeyError)
                 temp = pd.DataFrame(index=df_raw.index)
-                for c_name in ['Copertina', 'Titolo', 'BSR', 'Prezzo', 'Recensioni', 'Nome Autore', 'Categoria Editore']:
-                    temp[c_name] = np.nan
+                
+                # Inizializziamo le colonne obbligatorie per evitare il crash KeyError
+                columns_to_ensure = ["Copertina", "N. Libro", "BSR", "Titolo", "Prezzo", "Recensioni", "Nome Autore", "Categoria Editore"]
+                for col in columns_to_ensure: temp[col] = np.nan
 
-                # --- MAPPING ---
-                img_c = find_col(['s-image src', 'a-dynamic-image src', 'image', 'copertina', 'src'])
+                # --- 1. COPERTINA ---
+                img_c = find_col(['s-image src', 'a-dynamic-image src', 'image', 'src'])
                 if img_c: temp['Copertina'] = df_raw[img_c]
                 
-                t_c = find_col(['a-size-medium', 'title', 'titolo', 'name', '_cdezb_p13n-sc-css-line-clamp-1_1fn1y'])
+                # --- 2. TITOLO & LINK ---
+                t_c = find_col(['a-size-medium', 'title', 'titolo', 'name', 'clamp'])
                 raw_t = df_raw[t_c].fillna("N/D").astype(str) if t_c else pd.Series(["N/D"]*len(df_raw))
                 link_c = find_col(['a-link-normal href', 'href', 'url', 'link'])
                 def fix_url(i):
@@ -80,6 +84,7 @@ with st.sidebar:
                     return v if 'http' in v else f"{base_url}{v}"
                 temp['Titolo'] = [f"[{str(t).replace('[','').replace(']','')}]({fix_url(i)})" if fix_url(i) else str(t) for i, t in enumerate(raw_t)]
                 
+                # --- 3. BSR ---
                 b_c = find_col(['zg-bdg-text', 'extension-rank', 'rank', 'bsr'])
                 if not b_c:
                     for c in df_raw.columns:
@@ -90,17 +95,20 @@ with st.sidebar:
                         return int(m.group(1).replace('.','').replace(',','')) if m else np.nan
                     temp['BSR'] = df_raw[b_c].apply(cl_bsr)
                 
-                p_c = find_col(['a-offscreen', 'price', 'prezzo', 'a-price-whole', 'p13n-sc-price'])
+                # --- 4. PREZZO ---
+                p_c = find_col(['a-offscreen', 'price', 'prezzo', 'a-price-whole'])
                 if p_c: temp['Prezzo'] = pd.to_numeric(df_raw[p_c].astype(str).str.replace(r'[^\d.,]', '', regex=True).str.replace(',', '.'), errors='coerce')
                 
-                r_c = find_col(['a-size-mini', 'a-size-small', 'a-size-base', 'voti', 'review'])
+                # --- 5. RECENSIONI ---
+                r_c = find_col(['a-size-mini', 'a-size-small', 'voti', 'review', 'rating'])
                 if r_c:
                     def cl_r(v):
                         n = re.findall(r'\b\d+\b', str(v).replace('.','').replace(',',''))
                         return int(max(n, key=int)) if n else np.nan
                     temp['Recensioni'] = df_raw[r_c].apply(cl_r)
                 
-                # --- AUTORE FIX ---
+                # --- 6. AUTORE (RICERCA AGGRESSIVA) ---
+                # Cerchiamo colonne che contengono "by", "di", o nomi tipici
                 e_c = find_col(['a-size-base 2', 'a-color-secondary', 'author', 'editore', 'byline', 'brand'])
                 if e_c:
                     def get_author(v):
@@ -111,20 +119,23 @@ with st.sidebar:
                     
                     def check_i(v):
                         t = str(v).lower()
-                        return "Independent" if any(s in t for s in ['independently', 'kdp', 'indipendente']) else "Publishing House"
+                        if any(s in t for s in ['independently', 'kdp', 'indipendente', 'createspace']): return "Independent"
+                        return "Publishing House"
                     temp['Categoria Editore'] = df_raw[e_c].apply(check_i)
                 else:
+                    temp['Nome Autore'] = "N/D"
                     temp['Categoria Editore'] = "Publishing House"
 
                 all_dfs.append(temp)
             
             st.session_state.raw_data = pd.concat(all_dfs, ignore_index=True)
-            st.session_state.raw_data.insert(1, 'N. Libro', range(1, len(st.session_state.raw_data) + 1))
+            # Rigeneriamo l'ID sequenziale corretto per tutti i libri
+            st.session_state.raw_data['N. Libro'] = range(1, len(st.session_state.raw_data) + 1)
             st.rerun()
 
     if st.session_state.raw_data is not None:
         st.markdown("---")
-        tipo = st.selectbox("Filtra per Tipo:", ["Tutti", "Independent", "Publishing House"])
+        tipo = st.selectbox("Filtra Editore:", ["Tutti", "Independent", "Publishing House"])
         st.session_state.pub_filter = tipo
 
     if st.button("🔄 RESET"):
@@ -149,15 +160,16 @@ if st.session_state.raw_data is not None:
         m2.metric("Prezzo Avg", f"{df_f['Prezzo'].mean():.2f} €" if pd.notna(df_f['Prezzo'].mean()) else "N/D")
         m3.metric("BSR Avg", f"{int(df_f['BSR'].mean()):,}".replace(',', '.') if pd.notna(df_f['BSR'].mean()) else "N/D")
         
-        # VALVOLA DI SICUREZZA PER LE COLONNE
-        desired = ["Copertina", "N. Libro", "BSR", "Titolo", "Prezzo", "Recensioni", "Nome Autore"]
-        actual = [c for c in desired if c in df_f.columns]
+        # Selezione colonne sicura (solo quelle che esistono)
+        cols_to_show = ["Copertina", "N. Libro", "BSR", "Titolo", "Prezzo", "Recensioni", "Nome Autore"]
+        existing_cols = [c for c in cols_to_show if c in df_f.columns]
         
         st.dataframe(
-            df_f[actual], use_container_width=True, height=800, hide_index=True,
+            df_f[existing_cols], use_container_width=True, height=800, hide_index=True,
             column_config={
                 "Copertina": st.column_config.ImageColumn("Cover"),
                 "Prezzo": st.column_config.NumberColumn("Prezzo (€)", format="%.2f"),
+                "BSR": st.column_config.NumberColumn("BSR Rank", format="%d"),
                 "Titolo": st.column_config.TextColumn("Titolo (Link)", width="large")
             }
         )
@@ -170,9 +182,9 @@ if st.session_state.raw_data is not None:
         
         if st.button("🪄 GENERA STRATEGIA", type="primary"):
             if nicchia and target:
-                with st.spinner("L'AI sta analizzando i dati..."):
+                with st.spinner("AI al lavoro..."):
                     client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                    prompt = f"Expert KDP analyzer. Nicchia: {nicchia}, Target: {target}. Genera 3 titoli e trama."
+                    prompt = f"Expert KDP. Nicchia: {nicchia}, Target: {target}. Genera 3 titoli e trama."
                     res = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}])
                     st.session_state.suggestions = res.choices[0].message.content
         
