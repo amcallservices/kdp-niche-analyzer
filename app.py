@@ -26,7 +26,7 @@ st.markdown("""
 st.markdown("<div class='program-title'>KDP Intelligence Hub v16.8 💰</div>", unsafe_allow_html=True)
 
 if 'raw_data' not in st.session_state: st.session_state.raw_data = None
-if 'suggestions' not in st.session_state: st.session_state.suggestions = None
+if 'ai_output' not in st.session_state: st.session_state.ai_output = None
 
 # ==============================================================================
 # 2. LOGICA DI ESTRAZIONE (BACKEND ANTI-CRASH)
@@ -100,12 +100,11 @@ with st.sidebar:
             
             st.session_state.raw_data = pd.concat(all_dfs, ignore_index=True)
             st.session_state.raw_data.insert(1, 'ID', range(1, len(st.session_state.raw_data) + 1))
-            st.session_state.suggestions = None
             st.rerun()
 
     if st.button("🔄 RESET"):
         st.session_state.raw_data = None
-        st.session_state.suggestions = None
+        st.session_state.ai_output = None
         st.rerun()
 
 # ==============================================================================
@@ -117,6 +116,7 @@ if st.session_state.raw_data is not None:
     avg_price = df['Prezzo'].mean()
     
     st.markdown("### 📈 Valutazione Ragionata della Nicchia")
+    
     c1, c2, c3 = st.columns(3)
     
     with c1:
@@ -128,7 +128,8 @@ if st.session_state.raw_data is not None:
     with c2:
         p_status = "BUON MARGINE" if avg_price > 12 else "BASSO MARGINE"
         p_color = "status-green" if avg_price > 12 else "status-red"
-        st.markdown(f<div class='profit-card'><p style='color:#8b949e;'>ECONOMIA</p><h2 class='{p_color}'>{p_status}</h2><p>Prezzo medio: {avg_price:.2f}€</p></div>", unsafe_allow_html=True)
+        # FIX: Aggiunte virgolette mancanti qui sotto
+        st.markdown(f"<div class='profit-card'><p style='color:#8b949e;'>ECONOMIA</p><h2 class='{p_color}'>{p_status}</h2><p>Prezzo medio: {avg_price:.2f}€</p></div>", unsafe_allow_html=True)
 
     with c3:
         verdict = "ECCELLENTE" if avg_bsr < 80000 and avg_price > 12 else "VALUTARE"
@@ -137,14 +138,18 @@ if st.session_state.raw_data is not None:
     st.markdown("---")
 
     # ==============================================================================
-    # 4. TABELLA DATI COMPLETA & STEP 2 AI (AGGIORNATO)
+    # 4. TABELLA DATI COMPLETA
     # ==============================================================================
     col_table, col_ai = st.columns([7, 3])
     
     with col_table:
         st.markdown("<p style='font-weight:bold; font-size:1.2rem;'>Dati Estratti (BSR Globale Corretto)</p>", unsafe_allow_html=True)
         cols_to_show = ["Copertina", "ID", "Titolo", "BSR", "Prezzo", "Autore", "Recensioni"]
-        st.dataframe(df[cols_to_show], use_container_width=True, hide_index=True, height=600,
+        st.dataframe(
+            df[cols_to_show], 
+            use_container_width=True, 
+            hide_index=True,
+            height=600,
             column_config={
                 "Copertina": st.column_config.ImageColumn("Cover", width="small"),
                 "Titolo": st.column_config.TextColumn("Titolo", width="large"),
@@ -158,46 +163,41 @@ if st.session_state.raw_data is not None:
         st.markdown("<h3>✨ AI Strategy Lab</h3>", unsafe_allow_html=True)
         nicchia_target = st.text_input("Nicchia analizzata")
         
-        # --- LOGICA AI AGGIUNTA QUI ---
         if st.button("🪄 GENERA STRATEGIA"):
             if nicchia_target:
-                with st.spinner("L'AI sta analizzando la nicchia e i concorrenti..."):
-                    try:
-                        # Recupera i primi 5 titoli della tabella per dare contesto all'IA
-                        top_competitors = ", ".join(df['Titolo'].dropna().head(5).tolist())
-                        
-                        client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                        
-                        system_prompt = f"Sei un esperto mondiale di marketing su Amazon KDP per il mercato {mkt}."
-                        user_prompt = f"""
-                        Analizza la nicchia: "{nicchia_target}".
-                        Dati rilevati: BSR medio di {int(avg_bsr)} e Prezzo medio di {avg_price:.2f}€.
-                        Competitors principali: {top_competitors}.
-
-                        Genera una strategia vincente:
-                        1. 5 Potenziali Titoli magnetici ad alta conversione.
-                        2. 5 Sottotitoli SEO-Optimized.
-                        3. Breve consiglio su quale 'angolo' di marketing usare per battere questi concorrenti.
-                        """
-
-                        response = client.chat.completions.create(
-                            model="gpt-4o",
-                            messages=[
-                                {"role": "system", "content": system_prompt},
-                                {"role": "user", "content": user_prompt}
-                            ]
-                        )
-                        st.session_state.suggestions = response.choices[0].message.content
-                    except Exception as e:
-                        st.error(f"Errore: {e}")
+                with st.spinner("L'AI sta analizzando i dati e i titoli concorrenti..."):
+                    client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+                    
+                    # Estraiamo i titoli dei top competitors per dare contesto all'AI
+                    competitor_titles = "\n".join(df['Titolo'].head(10).astype(str).tolist())
+                    
+                    prompt = f"""
+                    Sei un esperto di KDP Publishing e SEO Amazon per il mercato {mkt}.
+                    Nicchia analizzata: {nicchia_target}
+                    BSR Medio rilevato: {int(avg_bsr)}
+                    Prezzo Medio: {avg_price:.2f}€
+                    
+                    Ecco i titoli dei principali concorrenti:
+                    {competitor_titles}
+                    
+                    BASANDOTI SUI DATI SOPRA:
+                    1. Suggerisci 5 potenziali titoli magnetici che possano battere la concorrenza.
+                    2. Suggerisci 5 sottotitoli SEO con parole chiave ad alto volume.
+                    3. Spiega brevemente la strategia (perché questi titoli dovrebbero funzionare meglio).
+                    """
+                    
+                    response = client.chat.completions.create(
+                        model="gpt-4o",
+                        messages=[{"role": "user", "content": prompt}]
+                    )
+                    st.session_state.ai_output = response.choices[0].message.content
             else:
-                st.warning("Inserisci il nome della nicchia prima di generare.")
-        
-        if st.session_state.suggestions:
+                st.warning("Inserisci il nome della nicchia.")
+
+        if st.session_state.ai_output:
             st.markdown("---")
-            st.markdown(st.session_state.suggestions)
-        # ------------------------------
-        
+            st.markdown(st.session_state.ai_output)
+            
         st.markdown("</div>", unsafe_allow_html=True)
 else:
     st.info("🌙 Carica i tuoi file CSV per iniziare l'analisi di mercato.")
