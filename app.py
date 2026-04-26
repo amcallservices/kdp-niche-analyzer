@@ -7,7 +7,7 @@ import numpy as np
 # ==============================================================================
 # 1. DESIGN SYSTEM
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 13.7", page_icon="📈", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 13.8", page_icon="📈", layout="wide")
 
 st.markdown("""
     <style>
@@ -29,19 +29,23 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='program-title'>KDP Market Intelligence Hub v13.7</div>", unsafe_allow_html=True)
+st.markdown("<div class='program-title'>KDP Market Intelligence Hub v13.8</div>", unsafe_allow_html=True)
 
 # --- STATO ---
 for key in ['raw_data', 'suggestions', 'selected_market', 'pub_filter', 'raw_cols']:
     if key not in st.session_state: st.session_state[key] = None
 
 # ==============================================================================
-# 2. SIDEBAR (IMPORT E MAPPING)
+# 2. SIDEBAR (IMPORT E HYBRID MAPPING CON URL)
 # ==============================================================================
 with st.sidebar:
     st.markdown("<p style='font-weight:700; color:#9ca3af; font-size:0.8rem;'>STEP 1: IMPORTA DATI</p>", unsafe_allow_html=True)
     mkt_choice = st.selectbox("Marketplace", ["IT", "US", "UK", "DE", "FR", "ES"])
     st.session_state.selected_market = mkt_choice
+    
+    # Dizionario domini per costruire URL se abbiamo solo ASIN
+    domain_map = {"IT": "amazon.it", "US": "amazon.com", "UK": "amazon.co.uk", "DE": "amazon.de", "FR": "amazon.fr", "ES": "amazon.es"}
+    base_url = f"https://www.{domain_map[mkt_choice]}"
 
     uploaded_file = st.file_uploader("Carica CSV di Amazon", type=["csv"])
     pub_choice = st.selectbox("Tipo Editore", ["Tutti", "Independent", "Publishing House"])
@@ -68,15 +72,44 @@ with st.sidebar:
                 mapped_df = pd.DataFrame()
                 
                 # 1. Copertina
-                img_col = find_col(['image', 'img', 'thumbnail', 'photo', 'url', 'src', 'copertina', 'a-dynamic-image'])
+                img_col = find_col(['image', 'img', 'thumbnail', 'photo', 'url_image', 'src', 'copertina', 'a-dynamic-image'])
                 mapped_df['Copertina'] = df_raw[img_col] if img_col else None
                 
-                # 2A. ID Numerico (Progressivo)
-                mapped_df['N. Libro'] = range(1, len(df_raw) + 1)
+                # 2. ID e TITOLO CLICCABILE
+                mapped_df['ID'] = range(1, len(df_raw) + 1)
                 
-                # 2B. Titolo Testuale
                 t_col = find_col(['title', 'titolo', 'name', 'nome', 'product', 'text', 'a-size-medium', 'a-link-normal'])
-                mapped_df['Titolo Libro'] = df_raw[t_col] if t_col else "N/D"
+                raw_titles = df_raw[t_col].astype(str).replace('nan', 'N/D') if t_col else pd.Series(["N/D"] * len(df_raw))
+                
+                # Cerca un URL diretto o un ASIN
+                link_col = find_col(['url', 'link', 'href', 'page'])
+                asin_col = find_col(['asin'])
+                
+                # Funzione per costruire il titolo cliccabile
+                def make_clickable(row_idx, title):
+                    if title == "N/D": return title
+                    
+                    final_url = ""
+                    # Priorità 1: Se c'è una colonna URL esplicita (e non è l'immagine)
+                    if link_col and 'image' not in link_col.lower() and 'img' not in link_col.lower():
+                        val = str(df_raw.iloc[row_idx][link_col])
+                        if 'http' in val or 'amazon' in val:
+                            final_url = val if val.startswith('http') else f"{base_url}{val}"
+                    
+                    # Priorità 2: Se abbiamo trovato un ASIN
+                    if not final_url and asin_col:
+                        asin_val = str(df_raw.iloc[row_idx][asin_col]).strip()
+                        if len(asin_val) >= 10: # L'ASIN è tipicamente di 10 caratteri
+                             final_url = f"{base_url}/dp/{asin_val}"
+                             
+                    if final_url:
+                        # Rimuove caratteri problematici per il markdown
+                        clean_title = title.replace('[', '').replace(']', '') 
+                        return f"[{clean_title}]({final_url})"
+                    return title
+
+                # Applica la funzione a tutti i titoli
+                mapped_df['Titolo'] = [make_clickable(i, title) for i, title in enumerate(raw_titles)]
                 
                 # 3. BSR
                 b_col = find_col(['bsr', 'rank', 'classifica', 'sales', 'posizione', 'ranking', 'best sellers'])
@@ -144,6 +177,7 @@ if st.session_state.raw_data is not None:
         
         st.markdown("<br>", unsafe_allow_html=True)
         
+        # St.dataframe supporta nativamente i link in formato Markdown!
         st.dataframe(
             df, 
             use_container_width=True, 
@@ -151,8 +185,8 @@ if st.session_state.raw_data is not None:
             hide_index=True,
             column_config={
                 "Copertina": st.column_config.ImageColumn("Copertina"),
-                "N. Libro": st.column_config.NumberColumn("ID", width="small"),
-                "Titolo Libro": st.column_config.TextColumn("Titolo Libro", width="large"),
+                "ID": st.column_config.NumberColumn("ID", width="small"),
+                "Titolo": st.column_config.TextColumn("Titolo (Clicca per aprire)"), # Ora legge il link Markdown
                 "Prezzo": st.column_config.NumberColumn("Prezzo", format="%.2f €"),
                 "BSR": st.column_config.NumberColumn("BSR", format="%d"),
                 "Recensioni": st.column_config.NumberColumn("Recensioni", format="%d")
