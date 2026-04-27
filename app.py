@@ -5,9 +5,9 @@ import re
 import numpy as np
 
 # ==============================================================================
-# 1. DESIGN SYSTEM (TOTAL DARK + NO MENUS PER IFRAME)
+# 1. DESIGN SYSTEM
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 17.2", page_icon="💰", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 17.3", page_icon="💰", layout="wide")
 
 st.markdown("""
     <style>
@@ -24,15 +24,16 @@ st.markdown("""
         .status-green { color: #3fb950; font-weight: bold; }
         .status-yellow { color: #d29922; font-weight: bold; }
         .status-red { color: #f85149; font-weight: bold; }
-        .ai-panel { background-color: #161b22; padding: 2rem; border-radius: 12px; border: 1px solid #30363d; }
+        .ai-panel { background-color: #161b22; padding: 2rem; border-radius: 12px; border: 1px solid #30363d; margin-top: 20px; }
         [data-testid="stMetricValue"] { color: #58a6ff !important; font-weight: 800; }
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='program-title'>KDP Intelligence Hub v17.2 💰</div>", unsafe_allow_html=True)
+st.markdown("<div class='program-title'>KDP Intelligence Hub v17.3 💰</div>", unsafe_allow_html=True)
 
 if 'raw_data' not in st.session_state: st.session_state.raw_data = None
 if 'ai_output' not in st.session_state: st.session_state.ai_output = None
+if 'ai_plot' not in st.session_state: st.session_state.ai_plot = None # Variabile per il 3° Step
 
 # ==============================================================================
 # 2. LOGICA DI ESTRAZIONE POTENZIATA
@@ -55,13 +56,11 @@ with st.sidebar:
                 cols = df_raw.columns.tolist()
                 temp = pd.DataFrame(index=df_raw.index)
                 
-                # Pre-popolamento colonne per sicurezza
                 for col_name in ["Copertina", "Titolo", "BSR", "Prezzo", "Autore", "Recensioni"]:
                     temp[col_name] = np.nan
 
                 bsrs, authors = [], []
                 for _, row in df_raw.iterrows():
-                    # --- RADAR BSR REALE ---
                     ranks = []
                     for v in row.dropna():
                         v_s = str(v)
@@ -72,7 +71,6 @@ with st.sidebar:
                                 except: continue
                     bsrs.append(max(ranks) if ranks else np.nan)
                     
-                    # --- LOGICA AUTORE ---
                     auth = "N/D"
                     for i, c in enumerate(cols):
                         val_c = str(row[c])
@@ -84,11 +82,9 @@ with st.sidebar:
                 temp['BSR'] = bsrs
                 temp['Autore'] = authors
                 
-                # --- MAPPING COLONNE (POTENZIATO PER TITOLI COMPLESSI) ---
                 img_c = next((c for c in cols if any(k in c.lower() for k in ['s-image src', 'image', 'copertina', 'src'])), None)
                 if img_c: temp['Copertina'] = df_raw[img_c]
 
-                # Cerchiamo il titolo (spesso in classi p13n o a-size-medium)
                 tit_c = next((c for c in cols if any(k in c.lower() for k in ['line-clamp-1', 'title', 'titolo', 'name', 'a-size-medium'])), None)
                 if tit_c: temp['Titolo'] = df_raw[tit_c]
 
@@ -107,15 +103,17 @@ with st.sidebar:
             st.session_state.raw_data = pd.concat(all_dfs, ignore_index=True)
             st.session_state.raw_data.insert(1, 'ID', range(1, len(st.session_state.raw_data) + 1))
             st.session_state.ai_output = None
+            st.session_state.ai_plot = None
             st.rerun()
 
     if st.button("🔄 RESET"):
         st.session_state.raw_data = None
         st.session_state.ai_output = None
+        st.session_state.ai_plot = None
         st.rerun()
 
 # ==============================================================================
-# 3. PROFITABILITY ANALYSIS (FIX SYNTAX ERROR DEFINITIVO)
+# 3. PROFITABILITY ANALYSIS
 # ==============================================================================
 if st.session_state.raw_data is not None:
     df = st.session_state.raw_data.copy()
@@ -144,7 +142,7 @@ if st.session_state.raw_data is not None:
     st.markdown("---")
 
     # ==============================================================================
-    # 4. TABELLA DATI & AI STRATEGY LAB
+    # 4. TABELLA DATI E STEP 2 (AI STRATEGY LAB)
     # ==============================================================================
     col_table, col_ai = st.columns([7, 3])
     
@@ -161,8 +159,8 @@ if st.session_state.raw_data is not None:
         )
 
     with col_ai:
-        st.markdown("<div class='ai-panel'>", unsafe_allow_html=True)
-        st.markdown("<h3>✨ AI Strategy Lab</h3>", unsafe_allow_html=True)
+        st.markdown("<div class='ai-panel' style='margin-top:0px;'>", unsafe_allow_html=True)
+        st.markdown("<h3>✨ Step 2: AI Strategy Lab</h3>", unsafe_allow_html=True)
         nicchia_target = st.text_input("Nicchia analizzata")
         
         if st.button("🪄 GENERA STRATEGIA"):
@@ -195,5 +193,59 @@ if st.session_state.raw_data is not None:
             st.markdown("---")
             st.markdown(st.session_state.ai_output)
         st.markdown("</div>", unsafe_allow_html=True)
+
+    # ==============================================================================
+    # 5. STEP 3: BOOK ARCHITECT (TRAMA E OBIETTIVO)
+    # ==============================================================================
+    st.markdown("---")
+    st.markdown("<div class='ai-panel'>", unsafe_allow_html=True)
+    st.markdown("<h3>✍️ Step 3: Book Architect (Obiettivo & Trama)</h3>", unsafe_allow_html=True)
+    
+    col_input, col_empty = st.columns([1, 1])
+    with col_input:
+        titolo_scelto = st.text_input("Inserisci il Titolo del Libro scelto per generare la Trama:")
+    
+    if st.button("📝 ELABORA TRAMA DETTAGLIATA", type="primary"):
+        if titolo_scelto:
+            with st.spinner("L'IA sta redigendo l'obiettivo e la struttura complessa del libro..."):
+                try:
+                    client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+                    
+                    # Mappa per tradurre la sigla del marketplace nella lingua di output richiesta
+                    lingue_mercato = {
+                        "IT": "Italiano", "US": "Inglese Americano", "UK": "Inglese Britannico",
+                        "DE": "Tedesco", "FR": "Francese", "ES": "Spagnolo"
+                    }
+                    lingua_destinazione = lingue_mercato.get(mkt, "Inglese")
+
+                    prompt_trama = f"""
+                    Sei un Ghostwriter professionista e un Book Architect esperto in saggistica e manualistica per il mercato Amazon KDP.
+                    Ti è stato assegnato il seguente titolo per un nuovo libro: "{titolo_scelto}".
+                    
+                    IL TUO COMPITO:
+                    Redigere l'obiettivo del libro e una trama (outline) estremamente dettagliata, complessa e specifica.
+                    
+                    REGOLE:
+                    1. Scrivi TUTTO esclusivamente in lingua: {lingua_destinazione}.
+                    2. Sii tecnico, autorevole e approfondisci i concetti. Non usare frasi generiche.
+                    
+                    STRUTTURA RICHIESTA:
+                    - OBIETTIVO DEL LIBRO (Core Promise): Spiega nel dettaglio quale trasformazione tangibile o competenza specifica il lettore acquisirà.
+                    - TRAMA / OUTLINE DETTAGLIATO: Crea un indice ragionato capitolo per capitolo. Per ogni capitolo, elenca 3-4 sotto-argomenti o concetti chiave complessi che verranno trattati.
+                    """
+                    
+                    response_trama = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt_trama}])
+                    st.session_state.ai_plot = response_trama.choices[0].message.content
+                except Exception as e:
+                    st.error(f"Errore durante la generazione della trama: {e}")
+        else:
+            st.warning("Devi prima inserire un titolo nel campo sopra.")
+
+    if st.session_state.ai_plot:
+        st.markdown("<hr style='border-color:#30363d;'>", unsafe_allow_html=True)
+        st.markdown(st.session_state.ai_plot)
+    
+    st.markdown("</div>", unsafe_allow_html=True)
+
 else:
     st.info("🌙 Carica i tuoi file CSV per iniziare l'analisi di mercato.")
