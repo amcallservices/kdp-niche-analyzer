@@ -7,7 +7,7 @@ import numpy as np
 # ==============================================================================
 # 1. DESIGN SYSTEM
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 17.5", page_icon="💰", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 17.6", page_icon="💰", layout="wide")
 
 st.markdown("""
     <style>
@@ -29,14 +29,14 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='program-title'>KDP Intelligence Hub v17.5 💰</div>", unsafe_allow_html=True)
+st.markdown("<div class='program-title'>KDP Intelligence Hub v17.6 💰</div>", unsafe_allow_html=True)
 
 if 'raw_data' not in st.session_state: st.session_state.raw_data = None
 if 'ai_output' not in st.session_state: st.session_state.ai_output = None
-if 'ai_plot' not in st.session_state: st.session_state.ai_plot = None # Variabile per il 3° Step
+if 'ai_plot' not in st.session_state: st.session_state.ai_plot = None 
 
 # ==============================================================================
-# 2. LOGICA DI ESTRAZIONE POTENZIATA (Supporto per nuovi file Amazon)
+# 2. LOGICA DI ESTRAZIONE POTENZIATA (Omni-BSR & Universal Support)
 # ==============================================================================
 with st.sidebar:
     st.header("📥 Configurazione")
@@ -61,18 +61,24 @@ with st.sidebar:
 
                 bsrs, authors = [], []
                 for _, row in df_raw.iterrows():
-                    # RISOLTO BUG BSR: Escludiamo gli url ('http') per non leggere stringhe lunghissime come BSR
+                    # --- RADAR BSR POTENZIATO (Omni-Format) ---
                     ranks = []
                     for v in row.dropna():
-                        v_s = str(v)
-                        if '#' in v_s and 'http' not in v_s.lower():
-                            matches = re.findall(r'(\d{1,3}(?:[.,]\d{3})*|\d+)', v_s)
-                            for m in matches:
-                                try: ranks.append(int(m.replace('.','').replace(',','')))
-                                except: continue
+                        v_s = str(v).strip()
+                        # Identifica stringhe che contengono indicatori di classifica, escludendo i link
+                        if 'http' not in v_s.lower() and len(v_s) < 150:
+                            if any(k in v_s.lower() for k in ['#', 'n.', 'pos.', 'rank', 'classifica', 'bestseller']):
+                                # Estrae gruppi di numeri (gestisce 1.234 o 1,234)
+                                matches = re.findall(r'(\d{1,3}(?:[.,]\d{3})*|\d+)', v_s)
+                                for m in matches:
+                                    try:
+                                        val = int(m.replace('.','').replace(',',''))
+                                        if val > 0: ranks.append(val)
+                                    except: continue
+                    # Prende il valore più alto (che solitamente è il BSR globale)
                     bsrs.append(max(ranks) if ranks else np.nan)
                     
-                    # RISOLTO BUG AUTORI: Salta i link nascosti per trovare l'autore corretto
+                    # --- LOGICA AUTORE ---
                     auth = "N/D"
                     for i, c in enumerate(cols):
                         val_c = str(row[c]).strip()
@@ -92,17 +98,16 @@ with st.sidebar:
                 temp['BSR'] = bsrs
                 temp['Autore'] = authors
                 
+                # --- MAPPING COLONNE ---
                 img_c = next((c for c in cols if any(k in c.lower() for k in ['s-image src', 'image', 'copertina', 'src'])), None)
                 if img_c: temp['Copertina'] = df_raw[img_c]
 
-                # AGGIUNTO 'a-size-base-plus' PER I TITOLI NEI FILE TIPO amazon (15)
                 tit_c = next((c for c in cols if any(k in c.lower() for k in ['line-clamp-1', 'title', 'titolo', 'name', 'a-size-medium', 'a-size-base-plus'])), None)
                 if tit_c: temp['Titolo'] = df_raw[tit_c]
 
                 p_c = next((c for c in cols if any(k in c.lower() for k in ['price', 'prezzo', 'offscreen'])), None)
                 if p_c: temp['Prezzo'] = pd.to_numeric(df_raw[p_c].astype(str).str.replace(r'[^\d.,]', '', regex=True).str.replace(',', '.'), errors='coerce')
                 
-                # AGGIUNTO 'a-size-mini' PER TROVARE LE RECENSIONI NEL NUOVO FORMATO
                 rev_c = next((c for c in cols if any(k in c.lower() for k in ['review', 'voti', 'rating', 'a-size-base', 'a-size-mini'])), None)
                 if rev_c:
                     def cl_rev(v):
@@ -110,7 +115,6 @@ with st.sidebar:
                         return int(max(n, key=int)) if n else np.nan
                     temp['Recensioni'] = df_raw[rev_c].apply(cl_rev)
                 
-                # PULIZIA: Elimina eventuali banner pubblicitari (che non hanno un titolo)
                 temp = temp[temp['Titolo'].notna()]
                 temp = temp[temp['Titolo'].astype(str).str.strip() != '']
                 temp = temp[temp['Titolo'].astype(str).str.lower() != 'nan']
@@ -227,42 +231,27 @@ if st.session_state.raw_data is not None:
             with st.spinner("L'IA sta redigendo l'obiettivo e la struttura complessa del libro..."):
                 try:
                     client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                    
-                    # Mappa per tradurre la sigla del marketplace nella lingua di output richiesta
-                    lingue_mercato = {
-                        "IT": "Italiano", "US": "Inglese Americano", "UK": "Inglese Britannico",
-                        "DE": "Tedesco", "FR": "Francese", "ES": "Spagnolo"
-                    }
+                    lingue_mercato = {"IT": "Italiano", "US": "Inglese Americano", "UK": "Inglese Britannico", "DE": "Tedesco", "FR": "Francese", "ES": "Spagnolo"}
                     lingua_destinazione = lingue_mercato.get(mkt, "Inglese")
 
                     prompt_trama = f"""
                     Sei un Ghostwriter professionista e un Book Architect esperto in saggistica e manualistica per il mercato Amazon KDP.
-                    Ti è stato assegnato il seguente titolo per un nuovo libro: "{titolo_scelto}".
-                    
-                    IL TUO COMPITO:
-                    Redigere l'obiettivo del libro e una trama (outline) estremamente dettagliata, complessa e specifica.
-                    
-                    REGOLE:
-                    1. Scrivi TUTTO esclusivamente in lingua: {lingua_destinazione}.
-                    2. Sii tecnico, autorevole e approfondisci i concetti. Non usare frasi generiche.
-                    
-                    STRUTTURA RICHIESTA:
-                    - OBIETTIVO DEL LIBRO (Core Promise): Spiega nel dettaglio quale trasformazione tangibile o competenza specifica il lettore acquisirà.
-                    - TRAMA / OUTLINE DETTAGLIATO: Crea un indice ragionato capitolo per capitolo. Per ogni capitolo, elenca 3-4 sotto-argomenti o concetti chiave complessi che verranno trattati.
+                    Titolo: "{titolo_scelto}".
+                    Lingua: {lingua_destinazione}.
+                    Redigi l'obiettivo del libro e una trama (outline) dettagliata, complessa e specifica capitolo per capitolo.
                     """
                     
                     response_trama = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt_trama}])
                     st.session_state.ai_plot = response_trama.choices[0].message.content
                 except Exception as e:
-                    st.error(f"Errore durante la generazione della trama: {e}")
+                    st.error(f"Errore: {e}")
         else:
-            st.warning("Devi prima inserire un titolo nel campo sopra.")
+            st.warning("Devi prima inserire un titolo.")
 
     if st.session_state.ai_plot:
         st.markdown("<hr style='border-color:#30363d;'>", unsafe_allow_html=True)
         st.markdown(st.session_state.ai_plot)
     
     st.markdown("</div>", unsafe_allow_html=True)
-
 else:
     st.info("🌙 Carica i tuoi file CSV per iniziare l'analisi di mercato.")
