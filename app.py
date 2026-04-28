@@ -7,7 +7,7 @@ import numpy as np
 # ==============================================================================
 # 1. DESIGN SYSTEM
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 17.3", page_icon="💰", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 17.5", page_icon="💰", layout="wide")
 
 st.markdown("""
     <style>
@@ -29,14 +29,14 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='program-title'>KDP Intelligence Hub v17.3 💰</div>", unsafe_allow_html=True)
+st.markdown("<div class='program-title'>KDP Intelligence Hub v17.5 💰</div>", unsafe_allow_html=True)
 
 if 'raw_data' not in st.session_state: st.session_state.raw_data = None
 if 'ai_output' not in st.session_state: st.session_state.ai_output = None
 if 'ai_plot' not in st.session_state: st.session_state.ai_plot = None # Variabile per il 3° Step
 
 # ==============================================================================
-# 2. LOGICA DI ESTRAZIONE POTENZIATA
+# 2. LOGICA DI ESTRAZIONE POTENZIATA (Supporto per nuovi file Amazon)
 # ==============================================================================
 with st.sidebar:
     st.header("📥 Configurazione")
@@ -61,21 +61,31 @@ with st.sidebar:
 
                 bsrs, authors = [], []
                 for _, row in df_raw.iterrows():
+                    # RISOLTO BUG BSR: Escludiamo gli url ('http') per non leggere stringhe lunghissime come BSR
                     ranks = []
                     for v in row.dropna():
                         v_s = str(v)
-                        if '#' in v_s:
+                        if '#' in v_s and 'http' not in v_s.lower():
                             matches = re.findall(r'(\d{1,3}(?:[.,]\d{3})*|\d+)', v_s)
                             for m in matches:
                                 try: ranks.append(int(m.replace('.','').replace(',','')))
                                 except: continue
                     bsrs.append(max(ranks) if ranks else np.nan)
                     
+                    # RISOLTO BUG AUTORI: Salta i link nascosti per trovare l'autore corretto
                     auth = "N/D"
                     for i, c in enumerate(cols):
-                        val_c = str(row[c])
-                        if "author" in str(c).lower() or val_c.lower() == "author":
-                            auth = str(row[cols[i+1]]) if val_c.lower() == "author" and i+1 < len(cols) else val_c
+                        val_c = str(row[c]).strip()
+                        if "author" in str(c).lower() or val_c.lower() in ["author", "di", "by"]:
+                            if val_c.lower() in ["author", "di", "by"]:
+                                for j in range(1, 4):
+                                    if i+j < len(cols):
+                                        candidate = str(row[cols[i+j]]).strip()
+                                        if candidate and candidate.lower() != 'nan' and 'http' not in candidate:
+                                            auth = candidate
+                                            break
+                            else:
+                                auth = val_c
                             break
                     authors.append(re.sub(r'^(di|by|Author:)\s+', '', auth, flags=re.IGNORECASE))
 
@@ -85,19 +95,26 @@ with st.sidebar:
                 img_c = next((c for c in cols if any(k in c.lower() for k in ['s-image src', 'image', 'copertina', 'src'])), None)
                 if img_c: temp['Copertina'] = df_raw[img_c]
 
-                tit_c = next((c for c in cols if any(k in c.lower() for k in ['line-clamp-1', 'title', 'titolo', 'name', 'a-size-medium'])), None)
+                # AGGIUNTO 'a-size-base-plus' PER I TITOLI NEI FILE TIPO amazon (15)
+                tit_c = next((c for c in cols if any(k in c.lower() for k in ['line-clamp-1', 'title', 'titolo', 'name', 'a-size-medium', 'a-size-base-plus'])), None)
                 if tit_c: temp['Titolo'] = df_raw[tit_c]
 
                 p_c = next((c for c in cols if any(k in c.lower() for k in ['price', 'prezzo', 'offscreen'])), None)
                 if p_c: temp['Prezzo'] = pd.to_numeric(df_raw[p_c].astype(str).str.replace(r'[^\d.,]', '', regex=True).str.replace(',', '.'), errors='coerce')
                 
-                rev_c = next((c for c in cols if any(k in c.lower() for k in ['review', 'voti', 'rating', 'a-size-base'])), None)
+                # AGGIUNTO 'a-size-mini' PER TROVARE LE RECENSIONI NEL NUOVO FORMATO
+                rev_c = next((c for c in cols if any(k in c.lower() for k in ['review', 'voti', 'rating', 'a-size-base', 'a-size-mini'])), None)
                 if rev_c:
                     def cl_rev(v):
                         n = re.findall(r'\b\d+\b', str(v).replace('.','').replace(',',''))
                         return int(max(n, key=int)) if n else np.nan
                     temp['Recensioni'] = df_raw[rev_c].apply(cl_rev)
                 
+                # PULIZIA: Elimina eventuali banner pubblicitari (che non hanno un titolo)
+                temp = temp[temp['Titolo'].notna()]
+                temp = temp[temp['Titolo'].astype(str).str.strip() != '']
+                temp = temp[temp['Titolo'].astype(str).str.lower() != 'nan']
+
                 all_dfs.append(temp)
             
             st.session_state.raw_data = pd.concat(all_dfs, ignore_index=True)
