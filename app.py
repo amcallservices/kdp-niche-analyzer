@@ -7,7 +7,7 @@ import numpy as np
 # ==============================================================================
 # 1. DESIGN SYSTEM
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 17.6", page_icon="💰", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 17.7", page_icon="💰", layout="wide")
 
 st.markdown("""
     <style>
@@ -29,7 +29,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='program-title'>KDP Intelligence Hub v17.6 💰</div>", unsafe_allow_html=True)
+st.markdown("<div class='program-title'>KDP Intelligence Hub v17.7 💰</div>", unsafe_allow_html=True)
 
 if 'raw_data' not in st.session_state: st.session_state.raw_data = None
 if 'ai_output' not in st.session_state: st.session_state.ai_output = None
@@ -61,21 +61,20 @@ with st.sidebar:
 
                 bsrs, authors = [], []
                 for _, row in df_raw.iterrows():
-                    # --- RADAR BSR POTENZIATO (Omni-Format) ---
+                    # --- RADAR BSR POTENZIATO ---
                     ranks = []
                     for v in row.dropna():
                         v_s = str(v).strip()
-                        # Identifica stringhe che contengono indicatori di classifica, escludendo i link
-                        if 'http' not in v_s.lower() and len(v_s) < 150:
+                        # Escludiamo gli URL per evitare falsi positivi nel BSR
+                        if 'http' not in v_s.lower() and len(v_s) < 200:
                             if any(k in v_s.lower() for k in ['#', 'n.', 'pos.', 'rank', 'classifica', 'bestseller']):
-                                # Estrae gruppi di numeri (gestisce 1.234 o 1,234)
                                 matches = re.findall(r'(\d{1,3}(?:[.,]\d{3})*|\d+)', v_s)
                                 for m in matches:
                                     try:
                                         val = int(m.replace('.','').replace(',',''))
                                         if val > 0: ranks.append(val)
                                     except: continue
-                    # Prende il valore più alto (che solitamente è il BSR globale)
+                    # Prende il numero più alto per catturare il BSR principale (es. #120.000)
                     bsrs.append(max(ranks) if ranks else np.nan)
                     
                     # --- LOGICA AUTORE ---
@@ -115,10 +114,9 @@ with st.sidebar:
                         return int(max(n, key=int)) if n else np.nan
                     temp['Recensioni'] = df_raw[rev_c].apply(cl_rev)
                 
+                # Pulizia righe vuote
                 temp = temp[temp['Titolo'].notna()]
                 temp = temp[temp['Titolo'].astype(str).str.strip() != '']
-                temp = temp[temp['Titolo'].astype(str).str.lower() != 'nan']
-
                 all_dfs.append(temp)
             
             st.session_state.raw_data = pd.concat(all_dfs, ignore_index=True)
@@ -134,7 +132,7 @@ with st.sidebar:
         st.rerun()
 
 # ==============================================================================
-# 3. PROFITABILITY ANALYSIS
+# 3. PROFITABILITY ANALYSIS & GRAPHICAL INSIGHTS
 # ==============================================================================
 if st.session_state.raw_data is not None:
     df = st.session_state.raw_data.copy()
@@ -148,7 +146,6 @@ if st.session_state.raw_data is not None:
         if avg_bsr > 0 and avg_bsr < 80000: status, color, desc = "PROFITTABILITÀ ALTA", "status-green", "Volume di vendite elevato. Ottima nicchia."
         elif avg_bsr > 0 and avg_bsr < 150000: status, color, desc = "PROFITTABILITÀ MEDIA", "status-yellow", "Richiede Ads attive."
         else: status, color, desc = "PROFITTABILITÀ BASSA", "status-red", "Poche vendite o mercato saturo."
-        
         st.markdown(f"<div class='profit-card'><p style='color:#8b949e;'>VENDITE STIMATE</p><h2 class='{color}'>{status}</h2><p>{desc}</p></div>", unsafe_allow_html=True)
 
     with c2:
@@ -158,7 +155,28 @@ if st.session_state.raw_data is not None:
 
     with c3:
         verdict = "ECCELLENTE" if avg_bsr < 80000 and avg_bsr > 0 and avg_price > 12 else "VALUTARE"
-        st.markdown(f"<div class='profit-card'><p style='color:#8b949e;'>VERDETTO FINALE</p><h2 style='color:#58a6ff;'>{verdict}</h2><p>Analisi su {len(df)} libri concorrenti.</p></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='profit-card'><p style='color:#8b949e;'>VERDETTO FINALE</p><h2 style='color:#58a6ff;'>{verdict}</h2><p>Analisi su {len(df)} concorrenti.</p></div>", unsafe_allow_html=True)
+
+    # --- AGGIUNTA ANALISI GRAFICA ---
+    st.markdown("### 📊 Market Insights (Analisi Grafica)")
+    g1, g2 = st.columns(2)
+    
+    with g1:
+        # Mostra i primi 10 competitor per BSR
+        bsr_chart_data = df.dropna(subset=['BSR']).sort_values('BSR').head(10)
+        if not bsr_chart_data.empty:
+            st.write("**Top 10 Competitor per Ranking (BSR)**")
+            st.bar_chart(data=bsr_chart_data, x="Titolo", y="BSR", color="#58a6ff")
+        else:
+            st.info("⚠️ Dati BSR non presenti nei file per generare il grafico. Carica una classifica Bestseller per visualizzarli.")
+
+    with g2:
+        # Distribuzione Prezzi
+        if not df['Prezzo'].isna().all():
+            st.write("**Andamento Prezzi di Mercato (€)**")
+            st.line_chart(df['Prezzo'])
+        else:
+            st.info("⚠️ Dati Prezzo non disponibili per il grafico.")
 
     st.markdown("---")
 
@@ -190,25 +208,13 @@ if st.session_state.raw_data is not None:
                     try:
                         client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
                         top_titles = "\n".join(df['Titolo'].dropna().head(10).astype(str).tolist())
-                        
-                        prompt = f"""
-                        Sei un esperto di KDP Marketing per il marketplace {mkt}.
-                        Nicchia: {nicchia_target}
-                        Competitors attuali:
-                        {top_titles}
-                        
-                        Genera:
-                        1. 5 Titoli magnetici ad alta conversione.
-                        2. 5 Sottotitoli SEO per scalare il ranking.
-                        3. Spiega brevemente perché questi titoli batteranno i competitor.
-                        """
-                        
+                        prompt = f"Sei un esperto di KDP per {mkt}. Nicchia: {nicchia_target}. Competitor: {top_titles}. Genera 5 Titoli e 5 Sottotitoli SEO."
                         response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}])
                         st.session_state.ai_output = response.choices[0].message.content
                     except Exception as e:
-                        st.error(f"Errore: {e}")
+                        st.error(f"Errore AI: {e}")
             else:
-                st.warning("Assicurati di aver inserito la nicchia e caricato i dati correttamente.")
+                st.warning("Inserisci la nicchia.")
 
         if st.session_state.ai_output:
             st.markdown("---")
@@ -228,30 +234,22 @@ if st.session_state.raw_data is not None:
     
     if st.button("📝 ELABORA TRAMA DETTAGLIATA", type="primary"):
         if titolo_scelto:
-            with st.spinner("L'IA sta redigendo l'obiettivo e la struttura complessa del libro..."):
+            with st.spinner("Generazione trama in corso..."):
                 try:
                     client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
                     lingue_mercato = {"IT": "Italiano", "US": "Inglese Americano", "UK": "Inglese Britannico", "DE": "Tedesco", "FR": "Francese", "ES": "Spagnolo"}
                     lingua_destinazione = lingue_mercato.get(mkt, "Inglese")
-
-                    prompt_trama = f"""
-                    Sei un Ghostwriter professionista e un Book Architect esperto in saggistica e manualistica per il mercato Amazon KDP.
-                    Titolo: "{titolo_scelto}".
-                    Lingua: {lingua_destinazione}.
-                    Redigi l'obiettivo del libro e una trama (outline) dettagliata, complessa e specifica capitolo per capitolo.
-                    """
-                    
+                    prompt_trama = f"Ghostwriter professionista per {mkt}. Titolo: {titolo_scelto}. Lingua: {lingua_destinazione}. Redigi obiettivo e outline dettagliata."
                     response_trama = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt_trama}])
                     st.session_state.ai_plot = response_trama.choices[0].message.content
                 except Exception as e:
-                    st.error(f"Errore: {e}")
+                    st.error(f"Errore AI: {e}")
         else:
-            st.warning("Devi prima inserire un titolo.")
+            st.warning("Inserisci un titolo.")
 
     if st.session_state.ai_plot:
         st.markdown("<hr style='border-color:#30363d;'>", unsafe_allow_html=True)
         st.markdown(st.session_state.ai_plot)
-    
     st.markdown("</div>", unsafe_allow_html=True)
 else:
     st.info("🌙 Carica i tuoi file CSV per iniziare l'analisi di mercato.")
