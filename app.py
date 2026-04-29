@@ -7,7 +7,7 @@ import numpy as np
 # ==============================================================================
 # 1. DESIGN SYSTEM
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 18.3", page_icon="💰", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 18.4", page_icon="💰", layout="wide")
 
 st.markdown("""
     <style>
@@ -29,7 +29,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='program-title'>KDP Intelligence Hub v18.3 💰</div>", unsafe_allow_html=True)
+st.markdown("<div class='program-title'>KDP Intelligence Hub v18.4 💰</div>", unsafe_allow_html=True)
 
 if 'raw_data' not in st.session_state: st.session_state.raw_data = None
 if 'ai_output' not in st.session_state: st.session_state.ai_output = None
@@ -93,7 +93,7 @@ with st.sidebar:
                             else:
                                 auth = val_c
                             break
-                    # Fallback intelligente per gli autori nei nuovi CSV (es. amazon 16, 17, 18)
+                    # Fallback intelligente per gli autori nei nuovi CSV
                     if auth == "N/D":
                         for c in cols:
                             if any(k in str(c).lower() for k in ['secondary', 'color-base 2', 'sc-cddgoi']):
@@ -131,15 +131,23 @@ with st.sidebar:
                 temp['Autore'] = authors
                 temp['Prezzo'] = prices
                 
-                # --- MAPPING IMMAGINE, TITOLO E RECENSIONI ---
-                img_c = next((c for c in cols if any(k in c.lower() for k in ['s-image src', 'image', 'copertina', 'src'])), None)
+                # --- MAPPING IMMAGINE, TITOLO E RECENSIONI CON PRIORITÀ RIGIDA (V18.4 FIX) ---
+                img_c = None
+                for k in ['s-image src', 'image', 'copertina', 'src']:
+                    img_c = next((c for c in cols if k in c.lower()), None)
+                    if img_c: break
                 if img_c: temp['Copertina'] = df_raw[img_c]
 
-                # Supporto per i titoli in Amazon 16, 17, 18 (a-size-medium-plus, sc-epzla-d)
-                tit_c = next((c for c in cols if any(k in c.lower() for k in ['line-clamp-1', 'title', 'titolo', 'name', 'a-size-medium', 'a-size-base-plus', 'a-size-medium-plus', 'sc-epzla-d'])), None)
+                tit_c = None
+                for k in ['line-clamp-1', 'title', 'titolo', 'name', 'a-size-medium-plus', 'a-size-medium', 'a-size-base-plus', 'sc-epzla-d']:
+                    tit_c = next((c for c in cols if k in c.lower()), None)
+                    if tit_c: break
                 if tit_c: temp['Titolo'] = df_raw[tit_c]
 
-                rev_c = next((c for c in cols if any(k in c.lower() for k in ['review', 'voti', 'rating', 'a-size-base', 'a-size-mini'])), None)
+                rev_c = None
+                for k in ['review', 'voti', 'rating', 'a-size-mini', 'a-size-base']:
+                    rev_c = next((c for c in cols if k in c.lower()), None)
+                    if rev_c: break
                 if rev_c:
                     def cl_rev(v):
                         n = re.findall(r'\b\d+\b', str(v).replace('.','').replace(',',''))
