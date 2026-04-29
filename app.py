@@ -7,7 +7,7 @@ import numpy as np
 # ==============================================================================
 # 1. DESIGN SYSTEM
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 17.7", page_icon="💰", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 17.8", page_icon="💰", layout="wide")
 
 st.markdown("""
     <style>
@@ -29,14 +29,14 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='program-title'>KDP Intelligence Hub v17.7 💰</div>", unsafe_allow_html=True)
+st.markdown("<div class='program-title'>KDP Intelligence Hub v17.8 💰</div>", unsafe_allow_html=True)
 
 if 'raw_data' not in st.session_state: st.session_state.raw_data = None
 if 'ai_output' not in st.session_state: st.session_state.ai_output = None
 if 'ai_plot' not in st.session_state: st.session_state.ai_plot = None 
 
 # ==============================================================================
-# 2. LOGICA DI ESTRAZIONE POTENZIATA (Omni-BSR & Universal Support)
+# 2. LOGICA DI ESTRAZIONE POTENZIATA E BSR FIX
 # ==============================================================================
 with st.sidebar:
     st.header("📥 Configurazione")
@@ -61,20 +61,21 @@ with st.sidebar:
 
                 bsrs, authors = [], []
                 for _, row in df_raw.iterrows():
-                    # --- RADAR BSR POTENZIATO ---
+                    # --- RADAR BSR POTENZIATO E CORRETTO ---
                     ranks = []
                     for v in row.dropna():
                         v_s = str(v).strip()
                         # Escludiamo gli URL per evitare falsi positivi nel BSR
                         if 'http' not in v_s.lower() and len(v_s) < 200:
                             if any(k in v_s.lower() for k in ['#', 'n.', 'pos.', 'rank', 'classifica', 'bestseller']):
-                                matches = re.findall(r'(\d{1,3}(?:[.,]\d{3})*|\d+)', v_s)
+                                # Regex corretta per prendere l'intero numero indiviso
+                                matches = re.findall(r'\d+(?:[.,]\d+)*', v_s)
                                 for m in matches:
                                     try:
                                         val = int(m.replace('.','').replace(',',''))
                                         if val > 0: ranks.append(val)
                                     except: continue
-                    # Prende il numero più alto per catturare il BSR principale (es. #120.000)
+                    # Prende il numero più alto per catturare il BSR principale
                     bsrs.append(max(ranks) if ranks else np.nan)
                     
                     # --- LOGICA AUTORE ---
@@ -114,9 +115,15 @@ with st.sidebar:
                         return int(max(n, key=int)) if n else np.nan
                     temp['Recensioni'] = df_raw[rev_c].apply(cl_rev)
                 
-                # Pulizia righe vuote
+                # --- PULIZIA RIGHE VUOTE E RIMOZIONE DUPLICATI INTELLIGENTE ---
                 temp = temp[temp['Titolo'].notna()]
                 temp = temp[temp['Titolo'].astype(str).str.strip() != '']
+                temp = temp[temp['Titolo'].astype(str).str.lower() != 'nan']
+                
+                # Essenziale: se ci sono libri duplicati (es. in amazon (15) appaiono prima senza BSR e poi con BSR),
+                # questa riga unisce i duplicati, tenendo solo la versione che contiene il BSR valido.
+                temp = temp.sort_values('BSR', na_position='last').drop_duplicates(subset=['Titolo'], keep='first')
+
                 all_dfs.append(temp)
             
             st.session_state.raw_data = pd.concat(all_dfs, ignore_index=True)
