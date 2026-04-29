@@ -7,7 +7,7 @@ import numpy as np
 # ==============================================================================
 # 1. DESIGN SYSTEM
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 18.2", page_icon="💰", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 18.3", page_icon="💰", layout="wide")
 
 st.markdown("""
     <style>
@@ -29,7 +29,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='program-title'>KDP Intelligence Hub v18.2 💰</div>", unsafe_allow_html=True)
+st.markdown("<div class='program-title'>KDP Intelligence Hub v18.3 💰</div>", unsafe_allow_html=True)
 
 if 'raw_data' not in st.session_state: st.session_state.raw_data = None
 if 'ai_output' not in st.session_state: st.session_state.ai_output = None
@@ -239,12 +239,16 @@ if st.session_state.raw_data is not None:
         
         if st.button("🪄 GENERA STRATEGIA"):
             if nicchia_target and not df['Titolo'].isna().all():
-                with st.spinner("L'IA sta analizzando i competitor..."):
+                with st.spinner("L'IA sta analizzando tutti i dati completi dei file..."):
                     try:
                         client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                        # Estrae TUTTI i titoli rimuovendo .head(10) per fare in modo che analizzi tutti i titoli
-                        tutti_i_titoli = "\n".join(df['Titolo'].dropna().astype(str).tolist())
-                        prompt = f"Sei un esperto di KDP per {mkt}. Nicchia: {nicchia_target}. Competitor: {tutti_i_titoli}. Genera 5 Titoli e 5 Sottotitoli SEO."
+                        
+                        # --- MODIFICA 18.3: Estrae TUTTI I DATI e non solo i titoli ---
+                        colonne_utili = ['Titolo', 'Autore', 'Prezzo', 'BSR', 'Recensioni']
+                        tutti_i_dati = df[colonne_utili].to_csv(index=False, sep='|')
+                        
+                        prompt = f"Sei un esperto di KDP per {mkt}. Nicchia: {nicchia_target}. Ecco TUTTI i dati completi dei competitor (Titolo, Autore, Prezzo, BSR, Recensioni):\n{tutti_i_dati}\n\nBasandoti su un'attenta analisi di tutti questi dati incrociati, genera 5 Titoli e 5 Sottotitoli SEO."
+                        
                         response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}])
                         st.session_state.ai_output = response.choices[0].message.content
                     except Exception as e:
