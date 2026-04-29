@@ -7,7 +7,7 @@ import numpy as np
 # ==============================================================================
 # 1. DESIGN SYSTEM
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 17.8", page_icon="💰", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 17.9", page_icon="💰", layout="wide")
 
 st.markdown("""
     <style>
@@ -29,7 +29,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='program-title'>KDP Intelligence Hub v17.8 💰</div>", unsafe_allow_html=True)
+st.markdown("<div class='program-title'>KDP Intelligence Hub v17.9 💰</div>", unsafe_allow_html=True)
 
 if 'raw_data' not in st.session_state: st.session_state.raw_data = None
 if 'ai_output' not in st.session_state: st.session_state.ai_output = None
@@ -246,7 +246,21 @@ if st.session_state.raw_data is not None:
                     client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
                     lingue_mercato = {"IT": "Italiano", "US": "Inglese Americano", "UK": "Inglese Britannico", "DE": "Tedesco", "FR": "Francese", "ES": "Spagnolo"}
                     lingua_destinazione = lingue_mercato.get(mkt, "Inglese")
-                    prompt_trama = f"Ghostwriter professionista per {mkt}. Titolo: {titolo_scelto}. Lingua: {lingua_destinazione}. Redigi obiettivo e outline dettagliata."
+                    
+                    # --- NUOVO PROMPT CHE FORZA LA LINGUA AL MERCATO SELEZIONATO ---
+                    prompt_trama = f"""
+                    Sei un Ghostwriter professionista e Book Architect per il mercato Amazon KDP.
+                    Titolo del libro: "{titolo_scelto}".
+                    Mercato target: {mkt}.
+                    
+                    REGOLA FONDAMENTALE: Devi redigere l'obiettivo del libro e l'intera outline (titoli dei capitoli, sotto-argomenti e descrizioni) 
+                    ESCLUSIVAMENTE in {lingua_destinazione}. Se il mercato non è IT, non devi utilizzare MAI l'italiano nella tua risposta.
+                    
+                    STRUTTURA:
+                    1. OBIETTIVO: Core promise e trasformazione del lettore.
+                    2. OUTLINE: Struttura complessa e dettagliata capitolo per capitolo con 3-4 sotto-argomenti avanzati per ciascuno.
+                    """
+                    
                     response_trama = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt_trama}])
                     st.session_state.ai_plot = response_trama.choices[0].message.content
                 except Exception as e:
