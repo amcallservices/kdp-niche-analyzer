@@ -7,7 +7,7 @@ import numpy as np
 # ==============================================================================
 # 1. DESIGN SYSTEM
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 17.9", page_icon="💰", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 18.1", page_icon="💰", layout="wide")
 
 st.markdown("""
     <style>
@@ -29,14 +29,14 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='program-title'>KDP Intelligence Hub v17.9 💰</div>", unsafe_allow_html=True)
+st.markdown("<div class='program-title'>KDP Intelligence Hub v18.1 💰</div>", unsafe_allow_html=True)
 
 if 'raw_data' not in st.session_state: st.session_state.raw_data = None
 if 'ai_output' not in st.session_state: st.session_state.ai_output = None
 if 'ai_plot' not in st.session_state: st.session_state.ai_plot = None 
 
 # ==============================================================================
-# 2. LOGICA DI ESTRAZIONE POTENZIATA E BSR FIX
+# 2. LOGICA DI ESTRAZIONE POTENZIATA E BSR/PRICE/AUTHOR FIX
 # ==============================================================================
 with st.sidebar:
     st.header("📥 Configurazione")
@@ -59,31 +59,31 @@ with st.sidebar:
                 for col_name in ["Copertina", "Titolo", "BSR", "Prezzo", "Autore", "Recensioni"]:
                     temp[col_name] = np.nan
 
-                bsrs, authors = [], []
+                # --- CICLO AVANZATO RIGA PER RIGA PER I NUOVI FORMATI AMAZON ---
+                bsrs, authors, prices = [], [], []
+                
                 for _, row in df_raw.iterrows():
-                    # --- RADAR BSR POTENZIATO E CORRETTO ---
+                    # 1. BSR ESTRAZIONE
                     ranks = []
                     for v in row.dropna():
                         v_s = str(v).strip()
-                        # Escludiamo gli URL per evitare falsi positivi nel BSR
                         if 'http' not in v_s.lower() and len(v_s) < 200:
                             if any(k in v_s.lower() for k in ['#', 'n.', 'pos.', 'rank', 'classifica', 'bestseller']):
-                                # Regex corretta per prendere l'intero numero indiviso
                                 matches = re.findall(r'\d+(?:[.,]\d+)*', v_s)
                                 for m in matches:
                                     try:
                                         val = int(m.replace('.','').replace(',',''))
                                         if val > 0: ranks.append(val)
                                     except: continue
-                    # Prende il numero più alto per catturare il BSR principale
                     bsrs.append(max(ranks) if ranks else np.nan)
                     
-                    # --- LOGICA AUTORE ---
+                    # 2. AUTORE ESTRAZIONE
                     auth = "N/D"
                     for i, c in enumerate(cols):
                         val_c = str(row[c]).strip()
-                        if "author" in str(c).lower() or val_c.lower() in ["author", "di", "by"]:
-                            if val_c.lower() in ["author", "di", "by"]:
+                        c_lower = str(c).lower()
+                        if "author" in c_lower or val_c.lower() in ["author", "di", "by", "da"]:
+                            if val_c.lower() in ["author", "di", "by", "da"]:
                                 for j in range(1, 4):
                                     if i+j < len(cols):
                                         candidate = str(row[cols[i+j]]).strip()
@@ -93,21 +93,52 @@ with st.sidebar:
                             else:
                                 auth = val_c
                             break
-                    authors.append(re.sub(r'^(di|by|Author:)\s+', '', auth, flags=re.IGNORECASE))
+                    # Fallback intelligente per gli autori nei nuovi CSV (es. amazon 16, 17, 18)
+                    if auth == "N/D":
+                        for c in cols:
+                            if any(k in str(c).lower() for k in ['secondary', 'color-base 2', 'sc-cddgoi']):
+                                cand = str(row[c]).strip()
+                                if cand and cand.lower() != 'nan' and 'http' not in cand and len(cand) > 2:
+                                    if len(re.findall(r'\d', cand)) < 3: # Seleziona testo escludendo date o prezzi anomali
+                                        auth = cand
+                                        break
+                    authors.append(re.sub(r'^(di|by|da|Author:)\s+', '', auth, flags=re.IGNORECASE))
+                    
+                    # 3. PREZZO ESTRAZIONE (Ignora le false colonne testuali come "aok-offscreen")
+                    p = np.nan
+                    for c in cols:
+                        c_lower = str(c).lower()
+                        if any(k in c_lower for k in ['price', 'prezzo', 'offscreen']) and not any(x in c_lower for x in ['aok', 'symbol', 'fraction', 'decimal', 'whole']):
+                            val = str(row[c]).strip()
+                            if val.lower() != 'nan' and val != '':
+                                try:
+                                    # Pulisce lettere o simboli valutari lasciando solo numeri e virgole/punti
+                                    cleaned = "".join(filter(lambda x: x.isdigit() or x in ".,", val))
+                                    if ',' in cleaned and '.' in cleaned:
+                                        cleaned = cleaned.replace(',', '')
+                                    else:
+                                        cleaned = cleaned.replace(',', '.')
+                                    num = float(cleaned)
+                                    if num > 0:
+                                        p = num
+                                        break
+                                except:
+                                    continue
+                    prices.append(p)
 
+                # Mappiamo i dati trovati sulle colonne del DataFrame
                 temp['BSR'] = bsrs
                 temp['Autore'] = authors
+                temp['Prezzo'] = prices
                 
-                # --- MAPPING COLONNE ---
+                # --- MAPPING IMMAGINE, TITOLO E RECENSIONI ---
                 img_c = next((c for c in cols if any(k in c.lower() for k in ['s-image src', 'image', 'copertina', 'src'])), None)
                 if img_c: temp['Copertina'] = df_raw[img_c]
 
-                tit_c = next((c for c in cols if any(k in c.lower() for k in ['line-clamp-1', 'title', 'titolo', 'name', 'a-size-medium', 'a-size-base-plus'])), None)
+                # Supporto per i titoli in Amazon 16, 17, 18 (a-size-medium-plus, sc-epzla-d)
+                tit_c = next((c for c in cols if any(k in c.lower() for k in ['line-clamp-1', 'title', 'titolo', 'name', 'a-size-medium', 'a-size-base-plus', 'a-size-medium-plus', 'sc-epzla-d'])), None)
                 if tit_c: temp['Titolo'] = df_raw[tit_c]
 
-                p_c = next((c for c in cols if any(k in c.lower() for k in ['price', 'prezzo', 'offscreen'])), None)
-                if p_c: temp['Prezzo'] = pd.to_numeric(df_raw[p_c].astype(str).str.replace(r'[^\d.,]', '', regex=True).str.replace(',', '.'), errors='coerce')
-                
                 rev_c = next((c for c in cols if any(k in c.lower() for k in ['review', 'voti', 'rating', 'a-size-base', 'a-size-mini'])), None)
                 if rev_c:
                     def cl_rev(v):
@@ -115,13 +146,10 @@ with st.sidebar:
                         return int(max(n, key=int)) if n else np.nan
                     temp['Recensioni'] = df_raw[rev_c].apply(cl_rev)
                 
-                # --- PULIZIA RIGHE VUOTE E RIMOZIONE DUPLICATI INTELLIGENTE ---
+                # --- PULIZIA RIGHE VUOTE E RIMOZIONE DUPLICATI ---
                 temp = temp[temp['Titolo'].notna()]
                 temp = temp[temp['Titolo'].astype(str).str.strip() != '']
                 temp = temp[temp['Titolo'].astype(str).str.lower() != 'nan']
-                
-                # Essenziale: se ci sono libri duplicati (es. in amazon (15) appaiono prima senza BSR e poi con BSR),
-                # questa riga unisce i duplicati, tenendo solo la versione che contiene il BSR valido.
                 temp = temp.sort_values('BSR', na_position='last').drop_duplicates(subset=['Titolo'], keep='first')
 
                 all_dfs.append(temp)
@@ -247,7 +275,6 @@ if st.session_state.raw_data is not None:
                     lingue_mercato = {"IT": "Italiano", "US": "Inglese Americano", "UK": "Inglese Britannico", "DE": "Tedesco", "FR": "Francese", "ES": "Spagnolo"}
                     lingua_destinazione = lingue_mercato.get(mkt, "Inglese")
                     
-                    # --- NUOVO PROMPT CHE FORZA LA LINGUA AL MERCATO SELEZIONATO ---
                     prompt_trama = f"""
                     Sei un Ghostwriter professionista e Book Architect per il mercato Amazon KDP.
                     Titolo del libro: "{titolo_scelto}".
