@@ -7,7 +7,7 @@ import numpy as np
 # ==============================================================================
 # 1. DESIGN SYSTEM
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 18.4", page_icon="💰", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 18.5", page_icon="💰", layout="wide")
 
 st.markdown("""
     <style>
@@ -29,7 +29,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='program-title'>KDP Intelligence Hub v18.4 💰</div>", unsafe_allow_html=True)
+st.markdown("<div class='program-title'>KDP Intelligence Hub v18.5 💰</div>", unsafe_allow_html=True)
 
 if 'raw_data' not in st.session_state: st.session_state.raw_data = None
 if 'ai_output' not in st.session_state: st.session_state.ai_output = None
@@ -251,11 +251,16 @@ if st.session_state.raw_data is not None:
                     try:
                         client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
                         
-                        # --- MODIFICA 18.3: Estrae TUTTI I DATI e non solo i titoli ---
+                        # --- NUOVA MODIFICA: Determina la lingua in base al Marketplace scelto ---
+                        lingue_mercato = {"IT": "Italiano", "US": "Inglese Americano", "UK": "Inglese Britannico", "DE": "Tedesco", "FR": "Francese", "ES": "Spagnolo"}
+                        lingua_destinazione = lingue_mercato.get(mkt, "Inglese")
+
+                        # Estrae TUTTI I DATI
                         colonne_utili = ['Titolo', 'Autore', 'Prezzo', 'BSR', 'Recensioni']
                         tutti_i_dati = df[colonne_utili].to_csv(index=False, sep='|')
                         
-                        prompt = f"Sei un esperto di KDP per {mkt}. Nicchia: {nicchia_target}. Ecco TUTTI i dati completi dei competitor (Titolo, Autore, Prezzo, BSR, Recensioni):\n{tutti_i_dati}\n\nBasandoti su un'attenta analisi di tutti questi dati incrociati, genera 5 Titoli e 5 Sottotitoli SEO."
+                        # Aggiunta la forzatura per la lingua target
+                        prompt = f"Sei un esperto di KDP per {mkt}. Nicchia: {nicchia_target}. Ecco TUTTI i dati completi dei competitor (Titolo, Autore, Prezzo, BSR, Recensioni):\n{tutti_i_dati}\n\nBasandoti su un'attenta analisi di tutti questi dati incrociati, genera 5 Titoli e 5 Sottotitoli SEO. DEVI SCRIVERLI ESCLUSIVAMENTE IN LINGUA: {lingua_destinazione}."
                         
                         response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}])
                         st.session_state.ai_output = response.choices[0].message.content
