@@ -7,7 +7,7 @@ import numpy as np
 # ==============================================================================
 # 1. DESIGN SYSTEM
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 18.1", page_icon="💰", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 18.2", page_icon="💰", layout="wide")
 
 st.markdown("""
     <style>
@@ -29,7 +29,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='program-title'>KDP Intelligence Hub v18.1 💰</div>", unsafe_allow_html=True)
+st.markdown("<div class='program-title'>KDP Intelligence Hub v18.2 💰</div>", unsafe_allow_html=True)
 
 if 'raw_data' not in st.session_state: st.session_state.raw_data = None
 if 'ai_output' not in st.session_state: st.session_state.ai_output = None
@@ -197,10 +197,10 @@ if st.session_state.raw_data is not None:
     g1, g2 = st.columns(2)
     
     with g1:
-        # Mostra i primi 10 competitor per BSR
-        bsr_chart_data = df.dropna(subset=['BSR']).sort_values('BSR').head(10)
+        # Mostra TUTTI i competitor per BSR rimuovendo il limite .head(10)
+        bsr_chart_data = df.dropna(subset=['BSR']).sort_values('BSR')
         if not bsr_chart_data.empty:
-            st.write("**Top 10 Competitor per Ranking (BSR)**")
+            st.write("**Competitor per Ranking (BSR)**")
             st.bar_chart(data=bsr_chart_data, x="Titolo", y="BSR", color="#58a6ff")
         else:
             st.info("⚠️ Dati BSR non presenti nei file per generare il grafico. Carica una classifica Bestseller per visualizzarli.")
@@ -242,8 +242,9 @@ if st.session_state.raw_data is not None:
                 with st.spinner("L'IA sta analizzando i competitor..."):
                     try:
                         client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                        top_titles = "\n".join(df['Titolo'].dropna().head(10).astype(str).tolist())
-                        prompt = f"Sei un esperto di KDP per {mkt}. Nicchia: {nicchia_target}. Competitor: {top_titles}. Genera 5 Titoli e 5 Sottotitoli SEO."
+                        # Estrae TUTTI i titoli rimuovendo .head(10) per fare in modo che analizzi tutti i titoli
+                        tutti_i_titoli = "\n".join(df['Titolo'].dropna().astype(str).tolist())
+                        prompt = f"Sei un esperto di KDP per {mkt}. Nicchia: {nicchia_target}. Competitor: {tutti_i_titoli}. Genera 5 Titoli e 5 Sottotitoli SEO."
                         response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}])
                         st.session_state.ai_output = response.choices[0].message.content
                     except Exception as e:
