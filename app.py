@@ -7,7 +7,7 @@ import numpy as np
 # ==============================================================================
 # 1. DESIGN SYSTEM
 # ==============================================================================
-st.set_page_config(page_title="KDP OMNI-REASONER 18.5", page_icon="💰", layout="wide")
+st.set_page_config(page_title="KDP OMNI-REASONER 18.6", page_icon="💰", layout="wide")
 
 st.markdown("""
     <style>
@@ -29,7 +29,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='program-title'>KDP Intelligence Hub v18.5 💰</div>", unsafe_allow_html=True)
+st.markdown("<div class='program-title'>KDP Intelligence Hub v18.6 💰</div>", unsafe_allow_html=True)
 
 if 'raw_data' not in st.session_state: st.session_state.raw_data = None
 if 'ai_output' not in st.session_state: st.session_state.ai_output = None
@@ -131,7 +131,7 @@ with st.sidebar:
                 temp['Autore'] = authors
                 temp['Prezzo'] = prices
                 
-                # --- MAPPING IMMAGINE, TITOLO E RECENSIONI CON PRIORITÀ RIGIDA (V18.4 FIX) ---
+                # --- MAPPING IMMAGINE, TITOLO E RECENSIONI CON FILTRO ANTI-ESCA AMAZON (v18.6) ---
                 img_c = None
                 for k in ['s-image src', 'image', 'copertina', 'src']:
                     img_c = next((c for c in cols if k in c.lower()), None)
@@ -139,8 +139,9 @@ with st.sidebar:
                 if img_c: temp['Copertina'] = df_raw[img_c]
 
                 tit_c = None
-                for k in ['line-clamp-1', 'title', 'titolo', 'name', 'a-size-medium-plus', 'a-size-medium', 'a-size-base-plus', 'sc-epzla-d']:
-                    tit_c = next((c for c in cols if k in c.lower()), None)
+                # Ordine di priorità ottimizzato e filtro per escludere le colonne fisse inserite da Amazon
+                for k in ['title', 'titolo', 'name', 'line-clamp-1', 'a-size-medium', 'a-size-base-plus', 'a-size-medium-plus', 'sc-epzla-d']:
+                    tit_c = next((c for c in cols if k in c.lower() and len(df_raw[c].dropna().unique()) > 3), None)
                     if tit_c: break
                 if tit_c: temp['Titolo'] = df_raw[tit_c]
 
@@ -251,7 +252,7 @@ if st.session_state.raw_data is not None:
                     try:
                         client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
                         
-                        # --- NUOVA MODIFICA: Determina la lingua in base al Marketplace scelto ---
+                        # Determina la lingua in base al Marketplace scelto
                         lingue_mercato = {"IT": "Italiano", "US": "Inglese Americano", "UK": "Inglese Britannico", "DE": "Tedesco", "FR": "Francese", "ES": "Spagnolo"}
                         lingua_destinazione = lingue_mercato.get(mkt, "Inglese")
 
