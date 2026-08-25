@@ -6,18 +6,40 @@ import numpy as np
 
 
 def infer_file_metadata(filename, selected_market):
-    """Recover query/topic/market from a filename when the CSV has no metadata."""
+    """Return only trustworthy metadata; generic filenames are not queries."""
     stem = re.sub(r"\.[^.]+$", "", str(filename)).replace("_", " ").replace("-", " ")
-    market = selected_market
     upper = stem.upper()
+    market = selected_market
     for code in ("IT", "USA", "US", "UK", "DE", "FR", "ES"):
         if re.search(rf"\b{code}\b", upper):
             market = "US" if code == "USA" else code
             break
-    cleaned = re.sub(r"\b(?:IT|USA|US|UK|DE|FR|ES)\b", "", stem, flags=re.I)
-    cleaned = re.sub(r"\b(?:csv|amazon|kdp|analisi|completa|risultati|query)\b", "", cleaned, flags=re.I)
-    label = re.sub(r"\s+", " ", cleaned).strip(" _") or "non specificato"
-    return label, label, market
+    return "NON SPECIFICATO", "NON SPECIFICATO", market
+
+
+def parse_file_manifest(text):
+    """Parse lines: filename|query|argomento (optional)."""
+    manifest = {}
+    for line in str(text or "").splitlines():
+        parts = [p.strip() for p in line.split("|")]
+        if len(parts) >= 2 and parts[0]:
+            manifest[parts[0].lower()] = {
+                "query": parts[1] or "NON SPECIFICATO",
+                "topic": parts[2] if len(parts) > 2 and parts[2] else "NON SPECIFICATO",
+            }
+    return manifest
+
+
+def classify_relevance(title, topic, wanted_topics):
+    """Transparent three-state topic classification with a reason."""
+    text = f"{title or ''} {topic or ''}".lower()
+    terms = [t.strip().lower() for t in wanted_topics if t.strip()]
+    if not terms:
+        return "DA VERIFICARE", "Nessun argomento target specificato"
+    hits = [t for t in terms if t in text]
+    if hits:
+        return "PERTINENTE", f"Termini trovati: {', '.join(hits)}"
+    return "NON PERTINENTE", "Nessun termine dell'argomento trovato nel titolo"
 
 
 def first_matching_column(columns, terms):
@@ -156,6 +178,13 @@ with st.sidebar:
         placeholder="es. multimetro, saldatura TIG, stampa 3D"
     )
 
+    manifest_text = st.text_area(
+        "Metadati file (una riga: nomefile|query|argomento)",
+        placeholder="amazon_01.csv|multimetro diagnosi guasti|multimetro e diagnosi",
+        help="Se il CSV non contiene Query/Argomento, inserisci qui metadati espliciti. Il nome generico del file non viene usato come query."
+    )
+    file_manifest = parse_file_manifest(manifest_text)
+
     if st.button("📊 AVVIA ANALISI PROFITTO", type="primary"):
 
         if files:
@@ -189,6 +218,9 @@ with st.sidebar:
                 topic_col = first_matching_column(cols, ["argomento", "topic", "tema", "category"])
                 market_col = first_matching_column(cols, ["marketplace", "market", "mercato", "country"])
                 file_query, file_topic, file_market = infer_file_metadata(f.name, mkt)
+                explicit_meta = file_manifest.get(str(f.name).lower(), {})
+                file_query = explicit_meta.get("query", file_query)
+                file_topic = explicit_meta.get("topic", file_topic)
 
                 temp = pd.DataFrame(index=df_raw.index)
 
@@ -203,7 +235,9 @@ with st.sidebar:
                     "Argomento",
                     "Marketplace",
                     "FonteFile",
-                    "Pertinenza"
+                    "Pertinenza",
+                    "MotivoPertinenza",
+                    "Anomalia"
                 ]:
                     temp[col_name] = np.nan
 
@@ -223,51 +257,12 @@ with st.sidebar:
                 for _, row in df_raw.iterrows():
 
                     # ==========================================================
-                    # 1. BSR ESTRAZIONE
-                    # ==========================================================
-                    ranks = []
-
-                    for v in row.dropna():
-
-                        v_s = str(v).strip()
-
-                        if 'http' not in v_s.lower() and len(v_s) < 200:
-
-                            if any(
-                                k in v_s.lower()
-                                for k in [
-                                    '#',
-                                    'n.',
-                                    'pos.',
-                                    'rank',
-                                    'classifica',
-                                    'bestseller'
-                                ]
-                            ):
-
-                                matches = re.findall(
-                                    r'\d+(?:[.,]\d+)*',
-                                    v_s
-                                )
-
-                                for m in matches:
-
-                                    try:
-
-                                        val = int(
-                                            m.replace('.', '').replace(',', '')
-                                        )
-
-                                        if val > 0:
-                                            ranks.append(val)
-
-                                    except:
-                                        continue
-
-                    # Per Amazon il rank migliore è il numero più basso.
-                    bsrs.append(
-                        min(ranks) if ranks else np.nan
-                    )
+                    # 1. BSR: solo colonne esplicitamente nominate.
+                    rank_cols = [c for c in cols if any(k in str(c).lower() for k in
+                        ["bsr", "bestseller rank", "sales rank", "classifica"])]
+                    rank_values = [parse_number(row[c]) for c in rank_cols]
+                    rank_values = [v for v in rank_values if pd.notna(v) and v > 0]
+                    bsrs.append(min(rank_values) if rank_values else np.nan)
 
 
                     # ==========================================================
@@ -512,12 +507,14 @@ with st.sidebar:
                 if tit_c:
                     temp['Titolo'] = df_raw[tit_c]
 
-                if temi_target.strip():
-                    wanted = [x.strip().lower() for x in temi_target.split(",") if x.strip()]
-                    searchable = (temp["Titolo"].fillna("").astype(str) + " " + temp["Argomento"].fillna("").astype(str)).str.lower()
-                    temp["Pertinenza"] = searchable.apply(lambda text: any(term in text for term in wanted))
-                else:
-                    temp["Pertinenza"] = True
+                wanted = [x.strip() for x in temi_target.split(",") if x.strip()]
+                relevance = [classify_relevance(t, a, wanted) for t, a in zip(temp["Titolo"], temp["Argomento"])]
+                temp["Pertinenza"] = [r[0] for r in relevance]
+                temp["MotivoPertinenza"] = [r[1] for r in relevance]
+                temp["Anomalia"] = np.where(temp["Query"].isin(["", "NON SPECIFICATO", "nan"]), "Metadati query mancanti", "")
+                temp.loc[temp["BSR"].isna(), "Anomalia"] = temp.loc[temp["BSR"].isna(), "Anomalia"].apply(
+                    lambda x: (x + "; " if x else "") + "BSR non disponibile o non affidabile"
+                )
 
 
                 # --------------------------------------------------------------
@@ -603,12 +600,6 @@ with st.sidebar:
                 all_dfs,
                 ignore_index=True
             )
-
-            # Mantiene i risultati per query/argomento e scarta solo ciò che
-            # l'utente ha esplicitamente escluso con il filtro temi.
-            st.session_state.raw_data = st.session_state.raw_data[
-                st.session_state.raw_data["Pertinenza"]
-            ].copy()
 
             st.session_state.raw_data.insert(
                 1,
@@ -937,10 +928,15 @@ if st.session_state.raw_data is not None:
             "Numero_Competitor_Analizzati": len(df),
             "Righe_con_BSR": int(df["BSR"].notna().sum()),
             "Righe_con_Prezzo": int(df["Prezzo"].notna().sum()),
+            "Righe_Pertinenti": int((df["Pertinenza"] == "PERTINENTE").sum()),
+            "Righe_Non_Pertinenti": int((df["Pertinenza"] == "NON PERTINENTE").sum()),
+            "Righe_Da_Verificare": int((df["Pertinenza"] == "DA VERIFICARE").sum()),
+            "Righe_Metadati_Mancanti": int(df["Query"].isin(["", "NON SPECIFICATO", "nan"]).sum()),
+            "Righe_Con_Anomalia": int(df["Anomalia"].fillna("").astype(str).str.strip().ne("").sum()),
             "Valutazione_Profittabilita": status,
             "Valutazione_Margine": p_status,
             "Verdetto": verdict,
-            "Nota": "Le metriche di questo file sono aggregate e non vengono replicate nelle righe competitor."
+            "Nota": "Le metriche aggregate sono riepilogate qui; ogni riga conserva dati osservati e anomalie."
         }])
         st.download_button(
             label="⬇️ SCARICA RIEPILOGO NICCHIA CSV",
