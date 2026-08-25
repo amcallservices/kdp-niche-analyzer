@@ -4,67 +4,6 @@ import openai
 import re
 import numpy as np
 
-
-def infer_file_metadata(filename, selected_market):
-    """Return only trustworthy metadata; generic filenames are not queries."""
-    stem = re.sub(r"\.[^.]+$", "", str(filename)).replace("_", " ").replace("-", " ")
-    upper = stem.upper()
-    market = selected_market
-    for code in ("IT", "USA", "US", "UK", "DE", "FR", "ES"):
-        if re.search(rf"\b{code}\b", upper):
-            market = "US" if code == "USA" else code
-            break
-    return "NON SPECIFICATO", "NON SPECIFICATO", market
-
-
-def parse_file_manifest(text):
-    """Parse lines: filename|query|argomento (optional)."""
-    manifest = {}
-    for line in str(text or "").splitlines():
-        parts = [p.strip() for p in line.split("|")]
-        if len(parts) >= 2 and parts[0]:
-            manifest[parts[0].lower()] = {
-                "query": parts[1] or "NON SPECIFICATO",
-                "topic": parts[2] if len(parts) > 2 and parts[2] else "NON SPECIFICATO",
-            }
-    return manifest
-
-
-def classify_relevance(title, topic, wanted_topics):
-    """Transparent three-state topic classification with a reason."""
-    text = f"{title or ''} {topic or ''}".lower()
-    terms = [t.strip().lower() for t in wanted_topics if t.strip()]
-    if not terms:
-        return "DA VERIFICARE", "Nessun argomento target specificato"
-    hits = [t for t in terms if t in text]
-    if hits:
-        return "PERTINENTE", f"Termini trovati: {', '.join(hits)}"
-    return "NON PERTINENTE", "Nessun termine dell'argomento trovato nel titolo"
-
-
-def first_matching_column(columns, terms):
-    for col in columns:
-        if any(term in str(col).lower() for term in terms):
-            return col
-    return None
-
-
-def parse_number(value):
-    text = str(value).strip()
-    if not text or text.lower() in {"nan", "none", "n/d"}:
-        return np.nan
-    text = re.sub(r"[^0-9,.-]", "", text)
-    if not text:
-        return np.nan
-    if "," in text and "." in text:
-        text = text.replace(".", "").replace(",", ".")
-    else:
-        text = text.replace(",", ".")
-    try:
-        return float(text)
-    except ValueError:
-        return np.nan
-
 # ==============================================================================
 # 1. DESIGN SYSTEM
 # ==============================================================================
@@ -173,18 +112,6 @@ with st.sidebar:
         accept_multiple_files=True
     )
 
-    temi_target = st.text_input(
-        "Argomenti da includere (facoltativo)",
-        placeholder="es. multimetro, saldatura TIG, stampa 3D"
-    )
-
-    manifest_text = st.text_area(
-        "Metadati file (una riga: nomefile|query|argomento)",
-        placeholder="amazon_01.csv|multimetro diagnosi guasti|multimetro e diagnosi",
-        help="Se il CSV non contiene Query/Argomento, inserisci qui metadati espliciti. Il nome generico del file non viene usato come query."
-    )
-    file_manifest = parse_file_manifest(manifest_text)
-
     if st.button("📊 AVVIA ANALISI PROFITTO", type="primary"):
 
         if files:
@@ -214,14 +141,6 @@ with st.sidebar:
 
                 cols = df_raw.columns.tolist()
 
-                query_col = first_matching_column(cols, ["query", "keyword", "parola chiave", "search term"])
-                topic_col = first_matching_column(cols, ["argomento", "topic", "tema", "category"])
-                market_col = first_matching_column(cols, ["marketplace", "market", "mercato", "country"])
-                file_query, file_topic, file_market = infer_file_metadata(f.name, mkt)
-                explicit_meta = file_manifest.get(str(f.name).lower(), {})
-                file_query = explicit_meta.get("query", file_query)
-                file_topic = explicit_meta.get("topic", file_topic)
-
                 temp = pd.DataFrame(index=df_raw.index)
 
                 for col_name in [
@@ -230,21 +149,9 @@ with st.sidebar:
                     "BSR",
                     "Prezzo",
                     "Autore",
-                    "Recensioni",
-                    "Query",
-                    "Argomento",
-                    "Marketplace",
-                    "FonteFile",
-                    "Pertinenza",
-                    "MotivoPertinenza",
-                    "Anomalia"
+                    "Recensioni"
                 ]:
                     temp[col_name] = np.nan
-
-                temp["Query"] = df_raw[query_col] if query_col else file_query
-                temp["Argomento"] = df_raw[topic_col] if topic_col else file_topic
-                temp["Marketplace"] = df_raw[market_col] if market_col else file_market
-                temp["FonteFile"] = f.name
 
 
                 # --------------------------------------------------------------
@@ -257,12 +164,50 @@ with st.sidebar:
                 for _, row in df_raw.iterrows():
 
                     # ==========================================================
-                    # 1. BSR: solo colonne esplicitamente nominate.
-                    rank_cols = [c for c in cols if any(k in str(c).lower() for k in
-                        ["bsr", "bestseller rank", "sales rank", "classifica"])]
-                    rank_values = [parse_number(row[c]) for c in rank_cols]
-                    rank_values = [v for v in rank_values if pd.notna(v) and v > 0]
-                    bsrs.append(min(rank_values) if rank_values else np.nan)
+                    # 1. BSR ESTRAZIONE
+                    # ==========================================================
+                    ranks = []
+
+                    for v in row.dropna():
+
+                        v_s = str(v).strip()
+
+                        if 'http' not in v_s.lower() and len(v_s) < 200:
+
+                            if any(
+                                k in v_s.lower()
+                                for k in [
+                                    '#',
+                                    'n.',
+                                    'pos.',
+                                    'rank',
+                                    'classifica',
+                                    'bestseller'
+                                ]
+                            ):
+
+                                matches = re.findall(
+                                    r'\d+(?:[.,]\d+)*',
+                                    v_s
+                                )
+
+                                for m in matches:
+
+                                    try:
+
+                                        val = int(
+                                            m.replace('.', '').replace(',', '')
+                                        )
+
+                                        if val > 0:
+                                            ranks.append(val)
+
+                                    except:
+                                        continue
+
+                    bsrs.append(
+                        max(ranks) if ranks else np.nan
+                    )
 
 
                     # ==========================================================
@@ -434,6 +379,7 @@ with st.sidebar:
                 temp['Autore'] = authors
                 temp['Prezzo'] = prices
 
+
                 # ==============================================================
                 # MAPPING IMMAGINE, TITOLO E RECENSIONI
                 # CON FILTRO ANTI-ESCA AMAZON (v18.6)
@@ -506,15 +452,6 @@ with st.sidebar:
 
                 if tit_c:
                     temp['Titolo'] = df_raw[tit_c]
-
-                wanted = [x.strip() for x in temi_target.split(",") if x.strip()]
-                relevance = [classify_relevance(t, a, wanted) for t, a in zip(temp["Titolo"], temp["Argomento"])]
-                temp["Pertinenza"] = [r[0] for r in relevance]
-                temp["MotivoPertinenza"] = [r[1] for r in relevance]
-                temp["Anomalia"] = np.where(temp["Query"].isin(["", "NON SPECIFICATO", "nan"]), "Metadati query mancanti", "")
-                temp.loc[temp["BSR"].isna(), "Anomalia"] = temp.loc[temp["BSR"].isna(), "Anomalia"].apply(
-                    lambda x: (x + "; " if x else "") + "BSR non disponibile o non affidabile"
-                )
 
 
                 # --------------------------------------------------------------
@@ -886,6 +823,28 @@ if st.session_state.raw_data is not None:
 
         df_export = df.copy()
 
+        # Aggiunge i dati tecnici generali dell'analisi
+        df_export["Marketplace"] = mkt
+
+        df_export["BSR Medio Nicchia"] = round(
+            avg_bsr,
+            2
+        )
+
+        df_export["Prezzo Medio Nicchia"] = round(
+            avg_price,
+            2
+        )
+
+        df_export["Numero Competitor Analizzati"] = len(df)
+
+        df_export["Valutazione Profittabilita"] = status
+
+        df_export["Valutazione Margine"] = p_status
+
+        df_export["Verdetto Finale"] = verdict
+
+
         # Ordine colonne del CSV
         colonne_export = [
             "ID",
@@ -895,11 +854,13 @@ if st.session_state.raw_data is not None:
             "Prezzo",
             "Recensioni",
             "Copertina",
-            "Query",
-            "Argomento",
             "Marketplace",
-            "FonteFile",
-            "Pertinenza"
+            "BSR Medio Nicchia",
+            "Prezzo Medio Nicchia",
+            "Numero Competitor Analizzati",
+            "Valutazione Profittabilita",
+            "Valutazione Margine",
+            "Verdetto Finale"
         ]
 
         df_export = df_export[colonne_export]
@@ -917,31 +878,6 @@ if st.session_state.raw_data is not None:
             label="⬇️ SCARICA ANALISI COMPLETA CSV",
             data=csv_export,
             file_name=f"KDP_Analisi_Completa_{mkt}.csv",
-            mime="text/csv",
-            use_container_width=True
-        )
-
-        summary = pd.DataFrame([{
-            "Marketplace": mkt,
-            "BSR_Medio_Valido": round(avg_bsr, 2) if avg_bsr else np.nan,
-            "Prezzo_Medio_Valido": round(avg_price, 2) if avg_price else np.nan,
-            "Numero_Competitor_Analizzati": len(df),
-            "Righe_con_BSR": int(df["BSR"].notna().sum()),
-            "Righe_con_Prezzo": int(df["Prezzo"].notna().sum()),
-            "Righe_Pertinenti": int((df["Pertinenza"] == "PERTINENTE").sum()),
-            "Righe_Non_Pertinenti": int((df["Pertinenza"] == "NON PERTINENTE").sum()),
-            "Righe_Da_Verificare": int((df["Pertinenza"] == "DA VERIFICARE").sum()),
-            "Righe_Metadati_Mancanti": int(df["Query"].isin(["", "NON SPECIFICATO", "nan"]).sum()),
-            "Righe_Con_Anomalia": int(df["Anomalia"].fillna("").astype(str).str.strip().ne("").sum()),
-            "Valutazione_Profittabilita": status,
-            "Valutazione_Margine": p_status,
-            "Verdetto": verdict,
-            "Nota": "Le metriche aggregate sono riepilogate qui; ogni riga conserva dati osservati e anomalie."
-        }])
-        st.download_button(
-            label="⬇️ SCARICA RIEPILOGO NICCHIA CSV",
-            data=summary.to_csv(index=False, encoding="utf-8-sig", sep=";").encode("utf-8-sig"),
-            file_name=f"KDP_Riepilogo_{mkt}.csv",
             mime="text/csv",
             use_container_width=True
         )
@@ -1038,18 +974,15 @@ if st.session_state.raw_data is not None:
                             f"(Titolo, Autore, Prezzo, BSR, Recensioni):\n"
                             f"{tutti_i_dati}\n\n"
                             f"Basandoti su un'attenta analisi di tutti "
-                            f"questi dati incrociati, separa sempre dati osservati, "
-                            f"inferenze e lacune. Non stimare il BSR quando è assente. "
-                            f"Genera 5 titoli e 5 sottotitoli SEO e, per ogni argomento, "
-                            f"2-3 parole chiave copiabili per Amazon.it e 2-3 per Amazon.com "
-                            f"quando pertinenti, nella sezione 'Parole chiave da cercare su Amazon per il CSV'. "
+                            f"questi dati incrociati, genera 5 Titoli "
+                            f"e 5 Sottotitoli SEO. "
                             f"DEVI SCRIVERLI ESCLUSIVAMENTE IN LINGUA: "
                             f"{lingua_destinazione}."
                         )
 
 
                         response = client.chat.completions.create(
-                            model="gpt-5.6-luna",
+                            model="gpt-4o",
                             messages=[
                                 {
                                     "role": "user",
@@ -1197,7 +1130,7 @@ if st.session_state.raw_data is not None:
                         .chat
                         .completions
                         .create(
-                            model="gpt-5.6-luna",
+                            model="gpt-4o",
                             messages=[
                                 {
                                     "role": "user",
