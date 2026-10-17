@@ -29,7 +29,7 @@ Dopo l'analisi dei concorrenti, una seconda azione facoltativa legge una pagina 
 
 L'analisi propone bisogni del lettore, aspetti apprezzati, criticità e possibili opportunità editoriali solo se sono disponibili recensioni testuali sia positive sia critiche. Non inventa dati demografici né dichiara che il campione rappresenti l'intero mercato. Infine mostra un **prompt da copiare manualmente** nella Chat della nicchia di Scrittore Site; non invia dati automaticamente a Scrittore Site. La sintesi richiede `OPENAI_API_KEY` nei Secrets.
 
-Restano disponibili i CSV Amazon come alternativa. La strategia AI già presente richiede anch'essa `OPENAI_API_KEY` nei Secrets di Streamlit.
+Restano disponibili i CSV Amazon come alternativa. L'importazione manuale riconosce anche i file `Amazon_Products_*.csv` con colonne `ASIN`, `Title`, `Price`, `Currency`, `BSR_Rank`, `BSR_Category`, `Rating`, `Review_Count`, `Seller_Type`, `Seller_Name`, `Bought_Past_Month` e `Product_URL`. Legge anche file con pochi libri, conserva ASIN e URL, separa BSR generale e BSR di categoria e tratta prezzi pari a zero o campi vuoti come dati mancanti. Il marketplace scelto nella sidebar determina l'analisi: le righe con un dominio Amazon di un altro mercato sono escluse e contate nel messaggio d'importazione, evitando di confrontare BSR non omogenei. Un tipo di venditore `UNKNOWN` non dimostra che il libro sia indipendente. La strategia AI già presente richiede anch'essa `OPENAI_API_KEY` nei Secrets di Streamlit.
 
 ## Limiti dell'analisi
 

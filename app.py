@@ -16,6 +16,7 @@ from review_insights import (
     buyer_persona_messages,
     parse_buyer_persona,
 )
+from manual_sources import is_products_csv, normalize_products_csv
 
 # ==============================================================================
 # 1. DESIGN SYSTEM
@@ -239,6 +240,7 @@ with st.sidebar:
         if files:
 
             all_dfs = []
+            import_notes = []
 
             for f in files:
 
@@ -247,6 +249,7 @@ with st.sidebar:
                         f,
                         sep=None,
                         engine='python',
+                        encoding='utf-8-sig',
                         on_bad_lines='skip'
                     )
 
@@ -260,6 +263,17 @@ with st.sidebar:
                         encoding='latin-1',
                         on_bad_lines='skip'
                     )
+
+                if is_products_csv(df_raw):
+                    normalized, details = normalize_products_csv(df_raw, mkt)
+                    if not normalized.empty:
+                        all_dfs.append(normalized)
+                    import_notes.append(
+                        f"{f.name}: {details['included']} libri importati su "
+                        f"{details['read']} righe; {details['other_market']} di altri "
+                        f"marketplace esclusi; {details['invalid']} righe non valide."
+                    )
+                    continue
 
                 cols = df_raw.columns.tolist()
 
@@ -652,29 +666,41 @@ with st.sidebar:
                     )
                 )
 
-                all_dfs.append(temp)
+                if not temp.empty:
+                    all_dfs.append(temp)
+                else:
+                    import_notes.append(
+                        f"{f.name}: nessun titolo utilizzabile nel formato CSV generico."
+                    )
 
-
-            st.session_state.raw_data = pd.concat(
-                all_dfs,
-                ignore_index=True
-            )
-
-            st.session_state.raw_data.insert(
-                1,
-                'ID',
-                range(
-                    1,
-                    len(st.session_state.raw_data) + 1
+            if not all_dfs:
+                st.error(
+                    "Nessun libro importabile per il marketplace selezionato. "
+                    "Controlla il mercato e i dati del CSV. " + " ".join(import_notes)
                 )
-            )
+            else:
+                st.session_state.raw_data = pd.concat(
+                    all_dfs,
+                    ignore_index=True
+                )
 
-            st.session_state.ai_output = None
-            st.session_state.ai_plot = None
-            st.session_state.source_summary = "Analisi da CSV caricati dall'utente."
-            st.session_state.data_marketplace = mkt
+                st.session_state.raw_data.insert(
+                    1,
+                    'ID',
+                    range(1, len(st.session_state.raw_data) + 1)
+                )
 
-            st.rerun()
+                st.session_state.ai_output = None
+                st.session_state.ai_plot = None
+                st.session_state.review_source_fingerprint = None
+                st.session_state.review_insights = None
+                st.session_state.review_niche = ""
+                st.session_state.source_summary = (
+                    "Analisi da CSV caricati dall'utente. " + " ".join(import_notes)
+                )
+                st.session_state.data_marketplace = mkt
+
+                st.rerun()
 
 
     if st.button("🔄 RESET"):
@@ -695,7 +721,10 @@ if st.session_state.raw_data is not None:
 
     df = st.session_state.raw_data.copy()
     analysis_marketplace = st.session_state.data_marketplace or mkt
-    is_auto_source = "Fonte" in df.columns
+    is_auto_source = bool(
+        st.session_state.source_summary
+        and st.session_state.source_summary.startswith("Ricerca automatica")
+    )
 
     if analysis_marketplace != mkt:
         st.warning(
@@ -1077,8 +1106,9 @@ if st.session_state.raw_data is not None:
         cols_to_show += [
             name for name in [
                 "Valuta", "BSR categorie", "Editore", "Indipendente",
-                "Formato", "Valutazioni", "ASIN", "Sponsorizzato",
-                "URL", "Rilevato il", "Fonte",
+                "Formato", "Valutazioni", "Valutazione media", "ASIN",
+                "Sponsorizzato", "URL", "Mercato fonte", "Tipo venditore",
+                "Venditore", "Acquisti mese dichiarati", "Rilevato il", "Fonte",
             ] if name in df.columns
         ]
 
@@ -1120,13 +1150,12 @@ if st.session_state.raw_data is not None:
 
         df_export["BSR Mediano Nicchia"] = (
             round(avg_bsr, 2)
-            if not (is_auto_source and len(observed_formats) > 1)
+            if bsr_count and not (is_auto_source and len(observed_formats) > 1)
             else np.nan
         )
 
-        df_export["Prezzo Mediano Nicchia"] = round(
-            avg_price,
-            2
+        df_export["Prezzo Mediano Nicchia"] = (
+            round(avg_price, 2) if price_count else np.nan
         )
 
         df_export["Numero Competitor Analizzati"] = len(df)
